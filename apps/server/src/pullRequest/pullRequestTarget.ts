@@ -130,13 +130,19 @@ export const resolveTarget = Effect.fn("PullRequestsToolkit.resolveTarget")(func
     sourceControlDefinitions.findByPublicHost(host)?.kind ??
     (recognizedKind === "gitcafe" ? recognizedKind : projectHost.kind);
   const definition = kind === null ? null : sourceControlDefinitions.get(kind);
+  const identity = project?.repositoryIdentity;
+  const ownRepository =
+    kind === projectHost.kind &&
+    (host === projectHost.host || host === URL.parse(identity?.webUrl ?? "")?.host.toLowerCase()) &&
+    sourceControlDefinitions.repositorySelector(identity)?.toLowerCase() === repository;
   const url =
     definition?.changeRequestUrl({
-      host,
-      repository,
-      number: input.number,
-      remoteUrl: project?.repositoryIdentity?.locator.remoteUrl,
-    }) ?? null;
+          host,
+          repository,
+          number: input.number,
+          remoteUrl: identity?.locator.remoteUrl,
+          webUrl: ownRepository ? identity?.webUrl : undefined,
+      }) ?? null;
   if (url === null) {
     // A known forge returns no URL when the repository is not in its shape.
     return yield* definition === null || definition.kind === "unknown"

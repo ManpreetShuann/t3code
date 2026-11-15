@@ -7328,6 +7328,65 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       });
     });
 
+  const fetchRemoteRef: GitVcsDriver.GitVcsDriver["Service"]["fetchRemoteRef"] = Effect.fn(
+    "fetchRemoteRef",
+  )(function* (input) {
+    yield* Effect.acquireUseRelease(
+      random.uuidV4().pipe(
+        Effect.orDie,
+        Effect.map((id) => `refs/t3code/pr-fetch/${id}`),
+      ),
+      (temporaryRef) =>
+        Effect.gen(function* () {
+          yield* runGit(
+            "GitVcsDriver.fetchRemoteRef.fetch",
+            input.cwd,
+            [
+              "fetch",
+              "--quiet",
+              "--no-tags",
+              "--",
+              input.remoteName,
+              `+${input.remoteRef}:${temporaryRef}`,
+            ],
+            // Long network transfers bypass the short-command pool used by local Git reads.
+            { timeoutMs: Duration.toMillis(Duration.minutes(5)) },
+          );
+          // Checkout can reset the current branch while protecting uncommitted work. Any other
+          // branch moves with `branch -f`: before Git 2.44, `checkout -B` would take a branch
+          // that another worktree has checked out.
+          const replacesCurrentBranch =
+            input.force === true &&
+            (yield* readCurrentBranch("GitVcsDriver.fetchRemoteRef.currentBranch", input.cwd)) ===
+              input.localBranch;
+          yield* runGit(
+            "GitVcsDriver.fetchRemoteRef.materialize",
+            input.cwd,
+            replacesCurrentBranch
+              ? ["checkout", "--no-track", "-B", input.localBranch, temporaryRef, "--"]
+              : [
+                  "branch",
+                  "--no-track",
+                  ...(input.force === true ? ["--force"] : []),
+                  "--",
+                  input.localBranch,
+                  temporaryRef,
+                ],
+          );
+        }),
+      (temporaryRef) =>
+        runGit("GitVcsDriver.fetchRemoteRef.cleanup", input.cwd, [
+          "update-ref",
+          "-d",
+          temporaryRef,
+        ]).pipe(
+          Effect.catch((cause) =>
+            Effect.logWarning("Failed to remove temporary Git fetch ref", { cause }),
+          ),
+        ),
+    );
+  });
+
   const setBranchUpstream: GitVcsDriver.GitVcsDriver["Service"]["setBranchUpstream"] = Effect.fn(
     "setBranchUpstream",
   )(
@@ -7905,6 +7964,9 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     }),
     switchRef: Effect.fnUntraced(function* (input) {
       return yield* withListRefsInvalidation(input.cwd, switchRef(input));
+    }),
+    fetchRemoteRef: Effect.fnUntraced(function* (input) {
+      return yield* withListRefsInvalidation(input.cwd, fetchRemoteRef(input));
     }),
     initRepo: initRepoWithListRefsInvalidation,
     invalidateRefs: Effect.fn("GitVcsDriver.invalidateRefs")(function* (cwd) {

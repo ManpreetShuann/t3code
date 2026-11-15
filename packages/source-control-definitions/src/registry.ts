@@ -1,4 +1,5 @@
 import * as AzureDevOps from "@t3tools/source-control-azure-devops/shared/definition";
+import * as BitbucketServer from "@t3tools/source-control-bitbucket-server/shared/definition";
 import * as Bitbucket from "@t3tools/source-control-bitbucket/shared/definition";
 import { makeSourceControlDefinitionRegistry } from "@t3tools/source-control-core/shared/definition";
 import * as CursorOrigin from "@t3tools/source-control-cursor-origin/shared/definition";
@@ -15,33 +16,42 @@ export { canonicalizePullRequestUrl as canonicalizeGitCafePullRequestUrl } from 
  * claim URLs first: GitHub and Forgejo accept the same routes on any hostname. TanStack Source is a
  * private beta: every reader knows its URLs, and only a server with its flag on offers the forge.
  */
-export const builtInSourceControlDefinitions = makeSourceControlDefinitionRegistry(
-  [
-    GitHub.definition,
-    CursorOrigin.definition,
-    GitLab.definition,
-    GitCafe.definition,
-    TanStackSource.definition,
-    Forgejo.definition,
-    Bitbucket.definition,
-    AzureDevOps.definition,
-  ],
-  {
-    claimChangeRequestUrlsFirst: [
-      GitCafe.definition.kind,
-      TanStackSource.definition.kind,
-      CursorOrigin.definition.kind,
-      AzureDevOps.definition.kind,
+export function makeBuiltInSourceControlDefinitions(options: { readonly tanStackSource: boolean }) {
+  const tanStackSource = options.tanStackSource ? [TanStackSource.definition] : [];
+  return makeSourceControlDefinitionRegistry(
+    [
+      GitHub.definition,
+      CursorOrigin.definition,
+      GitLab.definition,
+      GitCafe.definition,
+      ...tanStackSource,
+      Forgejo.definition,
+      BitbucketServer.definition,
+      Bitbucket.definition,
+      AzureDevOps.definition,
     ],
-    recognizeRemotesIn: [
-      GitCafe.definition.kind,
-      TanStackSource.definition.kind,
-      CursorOrigin.definition.kind,
-      Forgejo.definition.kind,
-      GitHub.definition.kind,
-      GitLab.definition.kind,
-      AzureDevOps.definition.kind,
-      Bitbucket.definition.kind,
-    ],
-  },
-);
+    {
+      claimChangeRequestUrlsFirst: [
+        GitCafe.definition.kind,
+        ...tanStackSource.map((definition) => definition.kind),
+        CursorOrigin.definition.kind,
+        AzureDevOps.definition.kind,
+      ],
+      recognizeRemotesIn: [
+        GitCafe.definition.kind,
+        ...tanStackSource.map((definition) => definition.kind),
+        CursorOrigin.definition.kind,
+        Forgejo.definition.kind,
+        BitbucketServer.definition.kind,
+        GitHub.definition.kind,
+        GitLab.definition.kind,
+        AzureDevOps.definition.kind,
+        Bitbucket.definition.kind,
+      ],
+    },
+  );
+}
+
+export const builtInSourceControlDefinitions = makeBuiltInSourceControlDefinitions({
+  tanStackSource: true,
+});

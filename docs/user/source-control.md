@@ -1,6 +1,6 @@
 # Source control
 
-T3 Code integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, Azure DevOps, GitCafe, Cursor Origin, Linear, and Jira Cloud to clone/publish repos, review and merge pull requests, manage issues, and watch CI.
+T3 Code integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, Bitbucket Data Center, Azure DevOps, GitCafe, Cursor Origin, Linear, and Jira Cloud to clone/publish repos, review and merge pull requests, manage issues, and watch CI.
 
 ## Connect an account
 
@@ -20,6 +20,25 @@ Install Git and authenticate on the machine running your T3 Code server (for rem
 > Note: Git `push` and `clone` still require Git SSH/HTTPS credentials on the server, separate from API tokens.
 
 > Note: With several `gt` servers and no `fj` login, `owner/repo` and newly published repositories go to `gt`'s default server (`gt config set default_host https://your-server`). With several `gt` accounts on one server, pick one with `gt auth switch <user> --host https://your-server`. If an SSH remote uses a different host name than the server's web address, run `gt config set ssh_host <ssh-host> --host https://your-server`.
+
+### Bitbucket Data Center
+
+For a self-hosted instance, expand **Bitbucket Data Center** in **Settings → Source control**.
+Enter its **Host URL**, including any port and context path, and a Data Center **HTTP access token**.
+Repository read permission enables PR browsing and reviews; merging requires repository write
+permission. Creating repositories requires permission to create them in the target project.
+Cloud API tokens are separate and cannot be used here.
+
+Configure one instance per environment on a server that can reach it. Saved settings apply
+immediately. When no complete host/token pair is saved, the server falls back to
+`T3CODE_BITBUCKET_SERVER_URL` and `T3CODE_BITBUCKET_SERVER_TOKEN`; restart it after changing them.
+Remove the saved credentials to disconnect, and clear these variables too if set. Git clone, fetch,
+and push still use that server's Git credentials or SSH keys.
+
+Use `PROJECTKEY/repository` when cloning or publishing, or `~username/repository` for personal
+repositories. HTTPS remotes with `/scm/` and standard SSH remotes are supported, including custom
+hostnames. The integration supports browsing and managing pull requests; repository permissions and
+merge checks remain authoritative.
 
 ## Start, clone, or publish a project
 
