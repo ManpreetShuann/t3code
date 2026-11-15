@@ -1,4 +1,5 @@
 import * as AzureDevOps from "@t3tools/source-control-azure-devops/shared/definition";
+import * as BitbucketServer from "@t3tools/source-control-bitbucket-server/shared/definition";
 import * as Bitbucket from "@t3tools/source-control-bitbucket/shared/definition";
 import { makeSourceControlDefinitionRegistry } from "@t3tools/source-control-core/shared/definition";
 import * as CursorOrigin from "@t3tools/source-control-cursor-origin/shared/definition";
@@ -22,6 +23,7 @@ export const builtInSourceControlDefinitions = makeSourceControlDefinitionRegist
     GitLab.definition,
     GitCafe.definition,
     Forgejo.definition,
+    BitbucketServer.definition,
     Bitbucket.definition,
     AzureDevOps.definition,
   ],
@@ -38,6 +40,7 @@ export const builtInSourceControlDefinitions = makeSourceControlDefinitionRegist
       GitHub.definition.kind,
       GitLab.definition.kind,
       AzureDevOps.definition.kind,
+      BitbucketServer.definition.kind,
       Bitbucket.definition.kind,
     ],
   },
