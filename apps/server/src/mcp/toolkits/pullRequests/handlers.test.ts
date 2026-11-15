@@ -379,6 +379,43 @@ describe("pull request toolkit handlers", () => {
         number: 9,
       });
       expect(onGitHub.url).toBe("https://github.com/acme/web/pull/9");
+
+      for (const remoteUrl of [
+        "ssh://git@code.example.com:7999/PROJ/web.git",
+        "git@code.example.com:PROJ/web.git",
+      ]) {
+        const bitbucket = yield* makeHarness({
+          project: makeProject({
+            canonicalKey: "code.example.com/proj/web",
+            locator: { source: "git-remote", remoteName: "origin", remoteUrl },
+            provider: SourceControlProviderKind.make("bitbucket-server"),
+            displayName: "PROJ/web",
+            webUrl: "https://code.example.com:8443/stash/projects/PROJ/repos/web",
+          }),
+        });
+        for (const host of [undefined, "CODE.EXAMPLE.COM:8443"]) {
+          const linked = yield* bitbucket.call("link_pull_request", {
+            ...(host ? { host } : {}),
+            repository: "PROJ/Web",
+            number: 42,
+          });
+          expect(linked).toEqual({
+            host: "code.example.com:8443",
+            repository: "proj/web",
+            number: 42,
+            url: "https://code.example.com:8443/stash/projects/PROJ/repos/web/pull-requests/42",
+            alreadyLinked: false,
+          });
+        }
+        for (const target of [
+          { repository: "PROJ/other", number: 42 },
+          { host: "other.example.com", repository: "PROJ/web", number: 42 },
+          { host: "code.example.com:9443", repository: "PROJ/web", number: 42 },
+        ]) {
+          const error = yield* bitbucket.call("link_pull_request", target).pipe(Effect.flip);
+          expect(error).toMatchObject({ _tag: "PullRequestUrlUnavailableError" });
+        }
+      }
     }),
   );
 
@@ -717,13 +754,34 @@ describe("pull request guide tools", () => {
           }),
           id: ProjectId.make("project-fork"),
         };
-        const harness = yield* makeHarness({ projects: [makeProject(), other, fork] });
+        const bitbucketProjects = [8443, 9443].map((port) => ({
+          ...makeProject({
+            canonicalKey: "code.example.com/proj/web",
+            locator: {
+              source: "git-remote",
+              remoteName: "origin",
+              remoteUrl: "ssh://git@code.example.com:7999/PROJ/web.git",
+            },
+            provider: SourceControlProviderKind.make("bitbucket-server"),
+            displayName: "PROJ/web",
+            webUrl: `https://code.example.com:${port}/stash/projects/PROJ/repos/web`,
+          }),
+          id: ProjectId.make(`project-bitbucket-${port}`),
+        }));
+        const harness = yield* makeHarness({
+          projects: [makeProject(), other, fork, ...bitbucketProjects],
+        });
         const result = yield* harness.call("write_pull_request_guides", {
           pullRequests: [
             { url: "https://github.com/acme/web/pull/7" },
             { repository: "t3tools/t3code", number: 12 },
             { url: "https://github.com/someone/else/pull/1" },
             { url: "https://github.com/someone/web/pull/3" },
+            { url: "https://code.example.com:8443/stash/projects/PROJ/repos/web/pull-requests/8" },
+            { host: "code.example.com:9443", repository: "PROJ/web", number: 9 },
+            {
+              url: "https://code.example.com:10443/stash/projects/PROJ/repos/web/pull-requests/10",
+            },
           ],
         });
         expect(
@@ -733,6 +791,9 @@ describe("pull request guide tools", () => {
           ["t3tools/t3code", 12, "started"],
           ["someone/else", 1, "failed"],
           ["someone/web", 3, "started"],
+          ["proj/web", 8, "started"],
+          ["proj/web", 9, "started"],
+          ["proj/web", 10, "failed"],
         ]);
         expect(result.guides[2]?.detail).toContain("No project in this environment");
         expect(
@@ -741,6 +802,8 @@ describe("pull request guide tools", () => {
           ["project-web", 7],
           [PROJECT_ID, 12],
           ["project-fork", 3],
+          ["project-bitbucket-8443", 8],
+          ["project-bitbucket-9443", 9],
         ]);
       }),
   );
