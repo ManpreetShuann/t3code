@@ -100,6 +100,7 @@ import {
   PROVIDER_PRESENTATION,
   providersWithUsage,
   rankProvidersByMetric,
+  type UsageProviderPresentation,
 } from "./usageProviders";
 import {
   readUsagePagePreferences,
@@ -1094,10 +1095,11 @@ function ProviderMark({
   readonly provider: UsageProviderKind;
   readonly className: string;
 }) {
-  const presentation = PROVIDER_PRESENTATION[provider];
+  const presentation: UsageProviderPresentation = PROVIDER_PRESENTATION[provider];
   return (
     <ProviderInstanceIcon
       driverKind={presentation.driverKind}
+      acpRegistryAgentId={presentation.acpRegistryAgentId}
       displayName={presentation.label}
       iconClassName={className}
     />

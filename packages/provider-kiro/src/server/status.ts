@@ -23,6 +23,7 @@ import {
   KIRO_SUPPORTED_RUNTIME_MODES,
   makeKiroAcpRuntime,
 } from "./acpSupport.ts";
+import { readKiroUsageLimits } from "./usageLimits.ts";
 import {
   AUTH_PROBE_TIMEOUT_MS,
   buildServerProvider,
@@ -430,7 +431,7 @@ export const checkKiroProviderStatus = Effect.fn("checkKiroProviderStatus")(func
   // Signed out, `--list-models` starts a browser login instead, and the agent
   // probe fails to start, so both run only once `whoami` has confirmed the
   // account. Without an agent list the composer shows no agent picker.
-  const [listed, agents] =
+  const [listed, agents, usageLimits] =
     auth.status === "authenticated"
       ? yield* Effect.all(
           [
@@ -452,11 +453,12 @@ export const checkKiroProviderStatus = Effect.fn("checkKiroProviderStatus")(func
               Effect.map(Option.getOrUndefined),
               Effect.orElseSucceed(() => undefined),
             ),
+            readKiroUsageLimits(settings, probeEnvironment),
           ],
           { concurrency: "unbounded" },
         )
-      : [undefined, undefined];
-  return snapshot(
+      : [undefined, undefined, undefined];
+  const provider = snapshot(
     settings,
     checkedAt,
     {
@@ -471,4 +473,5 @@ export const checkKiroProviderStatus = Effect.fn("checkKiroProviderStatus")(func
     listed,
     agents,
   );
+  return usageLimits === undefined ? provider : { ...provider, usageLimits };
 });

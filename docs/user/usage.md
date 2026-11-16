@@ -8,7 +8,8 @@ On mobile, choose **Usage** in the workspace navigation.
 
 ## Understand your usage
 
-**Usage** combines Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor history
+**Usage** combines Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, Cursor,
+GitHub Copilot CLI, and Kiro CLI history
 from your connected environments. It shows token use, cache savings, model breakdowns, and estimated API-equivalent
 cost, split by token type and by speed. These estimates are not your subscription bill.
 **Premium** is what Fast and Ultrafast requests cost above standard rates. Cost that cannot be
@@ -35,6 +36,10 @@ Cursor reads account usage from Cursor's API for the account you signed in with 
 `CURSOR_API_KEY`. This includes headless T3 sessions and desktop usage across machines; the same
 account counts once across connected environments. T3 does not estimate missing tokens from
 conversation text.
+
+GitHub Copilot reads the Copilot CLI's sessions in `~/.copilot/session-state`; Copilot in VS Code
+keeps no token history there, so it is not counted. Kiro records credits rather than tokens, so it
+shows cost only, estimated at Kiro's overage price of $0.04 per credit.
 
 Usage includes each configured account's history, including disabled accounts. Custom homes follow
 the account's home setting or its `CODEX_HOME`, `CLAUDE_CONFIG_DIR`, or `GROK_HOME` environment
@@ -131,6 +136,10 @@ with banked reset credits show a ticket count and the **Use reset** action in th
 Claude resets are not available when the server runs on macOS, where Claude keeps its login in the
 Keychain. On narrow screens, numbered rows below
 the bar show each account's quota, countdown, and credits. Tap a row to open its details.
+
+Kiro shows its monthly credits from the account `kiro-cli` is signed in with. GitHub Copilot (added
+from the ACP Registry) shows its monthly premium requests using `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`,
+or `GITHUB_TOKEN` on the server, or else your `gh` login.
 
 The same account signed in on more than one environment, or reported by a hub as well, counts once.
 Filter with the environment dropdown to see what a single machine has.

@@ -16,6 +16,7 @@ import { extractOpenCodeElicitationForm } from "./opencodeAcp.ts";
 import {
   copilotClientCapabilitiesMeta,
   extractCopilotSubagentUpdate,
+  isCopilotAcpSettings,
   isCopilotLostSessionError,
   makeCopilotSubagentRouting,
 } from "./copilotAcp.ts";
@@ -210,11 +211,7 @@ export const makeAcpRegistryAdapterV2 = Effect.fn("makeAcpRegistryAdapterV2")(fu
       /^opencode(?:-v2)?(\.exe|\.cmd)?$/i.test(
         options.settings.commandPath.split(/[\\/]/).pop() ?? "",
       ));
-  // Local installs launch the `copilot` binary directly with no registry id.
-  const isCopilot =
-    registryAgentId === "github-copilot-cli" ||
-    (options.settings.source === "local" &&
-      /^copilot(\.exe|\.cmd)?$/i.test(options.settings.commandPath.split(/[\\/]/).pop() ?? ""));
+  const isCopilot = isCopilotAcpSettings(options.settings);
   const isKimi =
     registryAgentId === "kimi-code" ||
     (options.settings.source === "local" &&
