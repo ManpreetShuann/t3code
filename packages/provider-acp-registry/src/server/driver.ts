@@ -16,6 +16,7 @@ import * as Digest from "effect/crypto/Digest";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Path from "effect/Path";
 import * as Equal from "effect/Equal";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -25,6 +26,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
 import * as ChildProcessSpawner from "effect/process/ChildProcessSpawner";
+import * as HttpClient from "effect/http/HttpClient";
 
 import * as ProviderHost from "@t3tools/provider-core/server/ProviderHost";
 import { AcpRegistryAdapterV2Driver, type AcpRegistryAdapterV2DriverEnv } from "./adapter.ts";
@@ -71,6 +73,9 @@ import {
   makeAcpRegistryLearnedModelOptionsStore,
   withAcpRegistryLearnedModelOptions,
 } from "./learnedModelOptions.ts";
+import { isCopilotAcpSettings } from "./copilotAcp.ts";
+import { copilotUsageReader } from "./copilotUsage.ts";
+import { readCopilotUsageLimits } from "./copilotUsageLimits.ts";
 
 const DRIVER_KIND = ProviderDriverKind.make("acpRegistry");
 const decodeSettings = Schema.decodeSync(AcpRegistrySettings);
@@ -610,9 +615,14 @@ export const checkAcpRegistryProviderReadiness = Effect.fn(
 export type AcpRegistryDriverEnv =
   | AcpRegistryAdapterV2DriverEnv
   | Digest.Digest
+  | HttpClient.HttpClient
   | ProviderHost.ProviderHost;
 
-export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryDriverEnv> = {
+export const AcpRegistryDriver: ProviderDriver<
+  AcpRegistrySettings,
+  AcpRegistryDriverEnv,
+  Path.Path
+> = {
   driverKind: DRIVER_KIND,
   metadata: {
     displayName: "ACP Registry",
@@ -622,6 +632,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
   },
   configSchema: AcpRegistrySettings,
   defaultConfig: () => decodeSettings({}),
+  usage: copilotUsageReader,
   create: Effect.fn("AcpRegistryDriver.create")(function* ({
     instanceId,
     displayName,
@@ -649,6 +660,7 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
     const path = yield* Path.Path;
     const hostEnvironment = yield* HostProcess.Environment;
     const host = yield* ProviderHost.ProviderHost;
+    const httpClient = yield* HttpClient.HttpClient;
     const continuationIdentity = defaultProviderContinuationIdentity({
       driverKind: DRIVER_KIND,
       instanceId,
@@ -792,6 +804,21 @@ export const AcpRegistryDriver: ProviderDriver<AcpRegistrySettings, AcpRegistryD
         ),
       ),
       Effect.flatMap(withLiveRuntimeState),
+      Effect.filterOrElse(
+        (provider) =>
+          !(
+            isCopilotAcpSettings(effectiveConfig) &&
+            provider.enabled &&
+            provider.installed &&
+            provider.auth.status !== "unauthenticated"
+          ),
+        (provider) =>
+          readCopilotUsageLimits(providerProbeEnvironment(processEnvironment)).pipe(
+            Effect.map((usageLimits) => ({ ...provider, usageLimits })),
+            Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+            Effect.provideService(HttpClient.HttpClient, httpClient),
+          ),
+      ),
     );
     const modelsToDiscover = Effect.fn("AcpRegistryDriver.modelsToDiscover")(function* (
       provider: ServerProvider,

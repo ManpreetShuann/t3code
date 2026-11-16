@@ -7,7 +7,9 @@ Track token usage, cache hit rates, estimated API-equivalent costs, and pooled s
 
 ## Understand your usage
 
-Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, and Cursor from your selected environments. Estimates reflect API-equivalent rates (not your subscription bill); **Premium** shows Fast/Ultrafast surcharge, and **Other** shows unsplit provider-reported costs.
+Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigravity, Pi, Muse Code, Cursor, GitHub Copilot CLI, and Kiro CLI from your selected environments. Estimates reflect API-equivalent rates (not your subscription bill); **Premium** shows Fast/Ultrafast surcharge, and **Other** shows unsplit provider-reported costs.
+
+GitHub Copilot usage comes from Copilot CLI sessions in `~/.copilot/session-state`; Copilot in VS Code does not retain token history there and is not counted. Kiro records credits rather than tokens, so Usage shows cost only, estimated at Kiro's overage price of $0.04 per credit.
 
 - **Usage access**: T3 Code reads an agent's local history only for agents you have turned on and allowed. The first time you open Usage, it asks which agents to include; change your answer per agent in **Settings → Providers → Usage access** (web/desktop). Grok and OpenCode Go limits, Claude reset credits, and matching Claude limits to your account read the agent's sign-in, so they also wait for this permission.
 - **Retention**: Servers keep scanned usage history for **92 days** by default (preserving Claude history after Claude's 30-day cleanup). Change `usageHistoryRetentionDays` in `<t3-home>/userdata/settings.json` (e.g. `365` or `"unlimited"`; views show up to 90 days).
@@ -38,6 +40,8 @@ Usage aggregates history across Codex, Claude Code, Grok Build, OpenCode, Antigr
   - **OpenCode**: OpenCode 2 servers with usage reporting show Go allowances and Console budgets for the connected workspace. Local servers can also report Go usage from a Go API key (`OPENCODE_API_KEY`).
   - **Cursor**: Reports monthly Auto + API quotas via `CURSOR_AUTH_TOKEN` or default-endpoint sign-in/`CURSOR_API_KEY`.
   - **Grok**: Reports billing-period quotas for `grok login` (not `XAI_API_KEY`).
+  - **Kiro**: Reports monthly credits from the account used by `kiro-cli`.
+  - **GitHub Copilot**: Reports monthly premium requests for the ACP Registry provider, using `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN`, or your `gh` login.
   - **Muse Code**: Reports session/weekly limits after running in a thread (not persisted across restarts).
   - Pure API-key accounts generally do not report subscription limits.
 - **Mobile widget**: Add the **Subscription usage** widget on iOS or Android to monitor Codex and Claude quotas from your home screen.

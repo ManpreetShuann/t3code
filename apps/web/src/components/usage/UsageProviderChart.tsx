@@ -12,7 +12,11 @@ import {
 } from "@t3tools/shared/usageFormat";
 import { formatRelativeHourShort } from "@t3tools/shared/usageFormatCopy";
 import { cn } from "~/lib/utils";
-import { PROVIDER_ORDER, PROVIDER_PRESENTATION } from "./usageProviders";
+import {
+  PROVIDER_ORDER,
+  PROVIDER_PRESENTATION,
+  type UsageProviderPresentation,
+} from "./usageProviders";
 import { observeResize } from "~/lib/observeResize";
 
 const VIEW_WIDTH = 960;
@@ -249,12 +253,17 @@ function UsageChartTooltip({
     >
       <div className="mb-1 text-muted-foreground">{label}</div>
       {providers.map((provider) => {
-        const { label: providerLabel, driverKind } = PROVIDER_PRESENTATION[provider];
+        const {
+          label: providerLabel,
+          driverKind,
+          acpRegistryAgentId,
+        }: UsageProviderPresentation = PROVIDER_PRESENTATION[provider];
         return (
           <div key={provider} className="flex items-center justify-between gap-3">
             <span className="flex items-center gap-1.5 text-muted-foreground">
               <ProviderInstanceIcon
                 driverKind={driverKind}
+                acpRegistryAgentId={acpRegistryAgentId}
                 displayName={providerLabel}
                 iconClassName="size-3"
               />

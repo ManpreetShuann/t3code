@@ -7,8 +7,16 @@ import type {
   AcpAdapterV2ExtensionContext,
   AcpAdapterV2SubagentUpdate,
 } from "@t3tools/provider-acp/server/adapter";
+import type { AcpRegistrySettings } from "../settings.ts";
 
 // The opt-in raw feed identifies each chunk by the preceding assistant.*_delta task call id.
+
+// Local installs launch the `copilot` binary directly with no registry id.
+export function isCopilotAcpSettings(settings: AcpRegistrySettings): boolean {
+  return settings.source === "local"
+    ? /^copilot(\.exe|\.cmd)?$/i.test(settings.commandPath.split(/[\\/]/).pop() ?? "")
+    : settings.agentId === "github-copilot-cli";
+}
 
 const COPILOT_META_KEY = "github.com/copilot";
 const COPILOT_SESSION_EVENT = "github.com/copilot/sessionEvent";

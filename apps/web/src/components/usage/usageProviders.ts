@@ -4,10 +4,12 @@ import { ProviderDriverKind } from "@t3tools/contracts";
 
 import type { UsageMetric } from "./usageShortcuts";
 
-type UsageProviderPresentation = {
+export type UsageProviderPresentation = {
   readonly label: string;
   readonly color: string;
   readonly driverKind: ProviderDriverKind;
+  /** Picks the agent's own icon when the driver hosts several agents. */
+  readonly acpRegistryAgentId?: string;
 };
 
 export const PROVIDER_PRESENTATION = {
@@ -46,6 +48,17 @@ export const PROVIDER_PRESENTATION = {
     label: "Muse Code",
     color: "#0866ff",
     driverKind: ProviderDriverKind.make("muse"),
+  },
+  copilot: {
+    label: "GitHub Copilot",
+    color: "#6e7bf2",
+    driverKind: ProviderDriverKind.make("acpRegistry"),
+    acpRegistryAgentId: "github-copilot-cli",
+  },
+  kiro: {
+    label: "Kiro",
+    color: "#9046ff",
+    driverKind: ProviderDriverKind.make("kiro"),
   },
 } satisfies Record<UsageProviderKind, UsageProviderPresentation>;
 

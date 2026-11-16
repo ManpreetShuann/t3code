@@ -23,7 +23,7 @@ import {
   speedCostSegments,
   tokenTypeSegments,
 } from "./usageBreakdown";
-import { PROVIDER_PRESENTATION } from "./usageProviders";
+import { PROVIDER_PRESENTATION, type UsageProviderPresentation } from "./usageProviders";
 
 export interface UsageChartWindow {
   readonly days: readonly string[];
@@ -56,7 +56,7 @@ export function UsageModelDialog({
     (bucket) => bucket.provider === model.provider && bucket.model === model.model,
   );
   const providers = [model.provider];
-  const presentation = PROVIDER_PRESENTATION[model.provider];
+  const presentation: UsageProviderPresentation = PROVIDER_PRESENTATION[model.provider];
   const costUnknown = isModelCostUnknown(model);
   const hitRate = cacheHitRate(model);
   const perMillion = costPerMillionTokens(model);
@@ -81,6 +81,7 @@ export function UsageModelDialog({
           <div className="flex items-center gap-2">
             <ProviderInstanceIcon
               driverKind={presentation.driverKind}
+              acpRegistryAgentId={presentation.acpRegistryAgentId}
               displayName={presentation.label}
               iconClassName="size-5"
             />
