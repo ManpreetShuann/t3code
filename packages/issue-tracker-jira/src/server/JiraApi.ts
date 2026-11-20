@@ -10,16 +10,17 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { type IssueCommentAudience, IssueTrackerKind } from "@t3tools/contracts";
+import type { IssueCommentAudience } from "@t3tools/contracts";
 import {
   IssueTrackerError,
   type IssueTrackerCredential,
 } from "@t3tools/source-control-core/server/IssueTracker";
 import * as IssueTrackerHost from "@t3tools/source-control-core/server/IssueTrackerHost";
 
+import { JIRA_KIND } from "../shared/issueUrl.ts";
 import type { AdfNode } from "./adf.ts";
 
-export const KIND = IssueTrackerKind.make("jira");
+export const KIND = JIRA_KIND;
 const REQUEST_TIMEOUT = "30 seconds";
 const PAGE = 100;
 /** Pages read of a list that only feeds a picker; past it the list is reported truncated. */
@@ -62,6 +63,39 @@ const IssueProject = Schema.Struct({
   projectTypeKey: Schema.optional(Schema.String),
 });
 
+const Named = Schema.Struct({ name: Schema.String });
+
+const RelatedIssue = Schema.Struct({
+  key: Schema.String,
+  fields: Schema.optional(
+    Schema.Struct({
+      summary: Schema.optional(Schema.String),
+      status: Schema.optional(Status),
+    }),
+  ),
+});
+export type JiraRelatedIssue = typeof RelatedIssue.Type;
+
+const IssueLink = Schema.Struct({
+  type: Schema.Struct({
+    name: Schema.String,
+    inward: Schema.optional(Schema.String),
+    outward: Schema.optional(Schema.String),
+  }),
+  inwardIssue: Schema.optional(RelatedIssue),
+  outwardIssue: Schema.optional(RelatedIssue),
+});
+export type JiraIssueLink = typeof IssueLink.Type;
+
+const Attachment = Schema.Struct({
+  id: Schema.String,
+  filename: Schema.String,
+  content: Schema.String,
+  mimeType: Schema.optional(Schema.NullOr(Schema.String)),
+  size: Schema.optional(Schema.NullOr(Schema.Number)),
+});
+export type JiraAttachment = typeof Attachment.Type;
+
 const Issue = Schema.Struct({
   id: Schema.String,
   key: Schema.String,
@@ -76,6 +110,12 @@ const Issue = Schema.Struct({
     updated: Schema.String,
     resolutiondate: Schema.optional(Schema.NullOr(Schema.String)),
     description: Schema.optional(Schema.Unknown),
+    issuetype: Schema.optional(Schema.NullOr(Named)),
+    priority: Schema.optional(Schema.NullOr(Named)),
+    parent: Schema.optional(Schema.NullOr(RelatedIssue)),
+    subtasks: Schema.optional(Schema.NullOr(Schema.Array(RelatedIssue))),
+    issuelinks: Schema.optional(Schema.NullOr(Schema.Array(IssueLink))),
+    attachment: Schema.optional(Schema.NullOr(Schema.Array(Attachment))),
   }),
   transitions: Schema.optional(Schema.Array(Transition)),
   changelog: Schema.optional(Schema.Struct({ histories: Schema.Array(History) })),
@@ -103,6 +143,60 @@ const ISSUE_FIELDS = [
   "updated",
   "resolutiondate",
 ];
+
+/** Only an issue's own page shows these. */
+const DETAIL_FIELDS = [
+  "description",
+  "issuetype",
+  "priority",
+  "parent",
+  "subtasks",
+  "issuelinks",
+  "attachment",
+];
+
+const IssueType = Schema.Struct({
+  id: Schema.String,
+  name: Schema.String,
+  description: Schema.optional(Schema.NullOr(Schema.String)),
+  subtask: Schema.optional(Schema.Boolean),
+});
+export interface JiraIssueType {
+  readonly id: string;
+  readonly name: string;
+  readonly description: string | null;
+  readonly subtask: boolean;
+}
+const toIssueType = (type: typeof IssueType.Type): JiraIssueType => ({
+  id: type.id,
+  name: type.name,
+  description: type.description ?? null,
+  subtask: type.subtask === true,
+});
+
+export const JiraPullRequest = Schema.Struct({
+  name: Schema.String,
+  url: Schema.String,
+  status: Schema.optional(Schema.String),
+});
+export type JiraPullRequest = typeof JiraPullRequest.Type;
+
+/** Jira's development panel: which connected tools (GitHub, GitLab, Bitbucket) hold PRs. */
+const DevelopmentSummary = Schema.Struct({
+  summary: Schema.Struct({
+    pullrequest: Schema.optional(
+      Schema.Struct({
+        byInstanceType: Schema.Record(Schema.String, Schema.Struct({ count: Schema.Number })),
+      }),
+    ),
+  }),
+});
+
+const DevelopmentDetail = Schema.Struct({
+  detail: Schema.Array(
+    Schema.Struct({ pullRequests: Schema.optional(Schema.Array(JiraPullRequest)) }),
+  ),
+});
 
 const ErrorBody = Schema.fromJsonString(
   Schema.Struct({
@@ -207,12 +301,21 @@ export class JiraApi extends Context.Service<
       key: string,
       names: ReadonlyArray<string>,
     ) => Effect.Effect<Readonly<Record<string, boolean>>, IssueTrackerError>;
+    /** The types this account can file in the project. */
     readonly issueTypes: (
       project: string,
-    ) => Effect.Effect<
-      ReadonlyArray<{ readonly id: string; readonly name: string; readonly subtask: boolean }>,
-      IssueTrackerError
-    >;
+    ) => Effect.Effect<ReadonlyArray<JiraIssueType>, IssueTrackerError>;
+    /** Every type the project's issues can have, subtasks included, for filtering. */
+    readonly projectIssueTypes: (
+      project: string,
+    ) => Effect.Effect<ReadonlyArray<JiraIssueType>, IssueTrackerError>;
+    /**
+     * The pull requests Jira's development panel shows for an issue, from every connected tool.
+     * Jira serves these from an undocumented API, so callers treat a failure as none.
+     */
+    readonly pullRequests: (
+      issueId: string,
+    ) => Effect.Effect<ReadonlyArray<JiraPullRequest>, IssueTrackerError>;
     readonly createIssue: (
       fields: Record<string, unknown>,
     ) => Effect.Effect<{ readonly key: string }, IssueTrackerError>;
@@ -231,11 +334,27 @@ export class JiraApi extends Context.Service<
       { readonly names: ReadonlyArray<string>; readonly truncated: boolean },
       IssueTrackerError
     >;
+    /** One page of the site's labels from `startAt`, or those Jira suggests for `query`. */
+    readonly labelPage: (input: {
+      readonly startAt: number;
+      readonly query?: string | undefined;
+    }) => Effect.Effect<
+      { readonly names: ReadonlyArray<string>; readonly hasMore: boolean },
+      IssueTrackerError
+    >;
     readonly assignable: (
       project: string,
       filter?: { readonly query: string } | { readonly accountId: string },
     ) => Effect.Effect<
       { readonly users: ReadonlyArray<JiraUser>; readonly truncated: boolean },
+      IssueTrackerError
+    >;
+    /** One page of the project's assignable people from `startAt`, narrowed by `query`. */
+    readonly assignablePage: (
+      project: string,
+      input: { readonly startAt: number; readonly query?: string | undefined },
+    ) => Effect.Effect<
+      { readonly users: ReadonlyArray<JiraUser>; readonly hasMore: boolean },
       IssueTrackerError
     >;
     /** People matching a name or email, for turning what a client sent into an account id. */
@@ -406,7 +525,7 @@ export const make = Effect.gen(function* () {
       method: "GET",
       path: `/rest/api/3/issue/${encodeURIComponent(key)}`,
       query: {
-        fields: [...ISSUE_FIELDS, "description"].join(","),
+        fields: [...ISSUE_FIELDS, ...DETAIL_FIELDS].join(","),
         expand: "transitions,changelog",
       },
     });
@@ -441,27 +560,41 @@ export const make = Effect.gen(function* () {
     );
 
   const issueTypes: JiraApi["Service"]["issueTypes"] = (project) =>
-    send(
-      "issueTypes",
-      Schema.Struct({
-        issueTypes: Schema.Array(
-          Schema.Struct({
-            id: Schema.String,
-            name: Schema.String,
-            subtask: Schema.optional(Schema.Boolean),
-          }),
-        ),
-      }),
-      {
+    send("issueTypes", Schema.Struct({ issueTypes: Schema.Array(IssueType) }), {
+      method: "GET",
+      path: `/rest/api/3/issue/createmeta/${encodeURIComponent(project)}/issuetypes`,
+      query: { maxResults: PAGE },
+    }).pipe(Effect.map((answer) => answer.issueTypes.map(toIssueType)));
+
+  const projectIssueTypes: JiraApi["Service"]["projectIssueTypes"] = (project) =>
+    send("projectIssueTypes", Schema.Struct({ issueTypes: Schema.Array(IssueType) }), {
+      method: "GET",
+      path: `/rest/api/3/project/${encodeURIComponent(project)}`,
+    }).pipe(Effect.map((answer) => answer.issueTypes.map(toIssueType)));
+
+  const pullRequests: JiraApi["Service"]["pullRequests"] = Effect.fn("JiraApi.pullRequests")(
+    function* (issueId) {
+      const { summary } = yield* send("pullRequests", DevelopmentSummary, {
         method: "GET",
-        path: `/rest/api/3/issue/createmeta/${encodeURIComponent(project)}/issuetypes`,
-        query: { maxResults: PAGE },
-      },
-    ).pipe(
-      Effect.map((answer) =>
-        answer.issueTypes.map((type) => ({ ...type, subtask: type.subtask === true })),
-      ),
-    );
+        path: "/rest/dev-status/latest/issue/summary",
+        query: { issueId },
+      });
+      const tools = Object.entries(summary.pullrequest?.byInstanceType ?? {}).flatMap(
+        ([applicationType, tool]) => (tool.count > 0 ? [applicationType] : []),
+      );
+      const details = yield* Effect.forEach(
+        tools,
+        (applicationType) =>
+          send("pullRequests", DevelopmentDetail, {
+            method: "GET",
+            path: "/rest/dev-status/latest/issue/detail",
+            query: { issueId, applicationType, dataType: "pullrequest" },
+          }).pipe(Effect.orElseSucceed(() => ({ detail: [] }))),
+        { concurrency: "unbounded" },
+      );
+      return details.flatMap(({ detail }) => detail.flatMap((entry) => entry.pullRequests ?? []));
+    },
+  );
 
   const createIssue: JiraApi["Service"]["createIssue"] = (fields) =>
     send("createIssue", Schema.Struct({ key: Schema.String }), {
@@ -527,6 +660,39 @@ export const make = Effect.gen(function* () {
     }).pipe(Effect.map((page) => page.values)),
   ).pipe(Effect.map((page) => ({ names: page.items, truncated: page.truncated })));
 
+  const labelPage: JiraApi["Service"]["labelPage"] = (input) =>
+    input.query === undefined
+      ? send(
+          "labels",
+          Schema.Struct({ values: Schema.Array(Schema.String), isLast: Schema.optional(Schema.Boolean) }),
+          {
+            method: "GET",
+            path: "/rest/api/3/label",
+            query: { startAt: input.startAt, maxResults: PAGE },
+          },
+        ).pipe(Effect.map((page) => ({ names: page.values, hasMore: page.isLast === false })))
+      : send(
+          "labels",
+          Schema.Struct({ results: Schema.Array(Schema.Struct({ value: Schema.String })) }),
+          {
+            method: "GET",
+            path: "/rest/api/3/jql/autocompletedata/suggestions",
+            query: { fieldName: "labels", fieldValue: input.query },
+          },
+        ).pipe(
+          Effect.map((page) => ({ names: page.results.map(({ value }) => value), hasMore: false })),
+        );
+
+  const assignablePage: JiraApi["Service"]["assignablePage"] = (project, input) =>
+    send("assignable", Schema.Array(User), {
+      method: "GET",
+      path: "/rest/api/3/user/assignable/search",
+      query: { project, startAt: input.startAt, maxResults: PAGE, query: input.query },
+    }).pipe(
+      // Jira drops people the caller may not see after paging, so only a full page promises more.
+      Effect.map((users) => ({ users, hasMore: users.length === PAGE })),
+    );
+
   const assignable: JiraApi["Service"]["assignable"] = (project, filter) =>
     paged(
       (startAt) =>
@@ -555,12 +721,16 @@ export const make = Effect.gen(function* () {
     getComments,
     permissions,
     issueTypes,
+    projectIssueTypes,
+    pullRequests,
     createIssue,
     updateIssue,
     transition,
     addComment,
     labels,
+    labelPage,
     assignable,
+    assignablePage,
     findUsers,
   });
 });

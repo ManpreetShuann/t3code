@@ -10,7 +10,8 @@ export function issueViewMatches(view: IssueSavedViewScope, scope: IssueSavedVie
       value.involvement,
       value.sort,
       [...value.labels].sort(),
-      value.assignee?.login ?? null,
+      [...(value.issueTypes ?? [])].sort(),
+      value.assignee?.accountId ?? value.assignee?.login ?? null,
     ]);
   return key(view) === key(scope);
 }

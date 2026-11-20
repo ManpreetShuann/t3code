@@ -7,6 +7,9 @@
  */
 import {
   CommandId,
+  type IssueDetail,
+  type MessageId,
+  type OrchestrationV2DomainEvent,
   threadIssueKeysEqual,
   type IssueLinkedThreadsResult,
   type IssueOperationError,
@@ -15,13 +18,17 @@ import {
   type ThreadIssueKey,
   type ThreadIssueLinkSource,
 } from "@t3tools/contracts";
+import { JIRA_KIND, parseJiraIssueUrl } from "@t3tools/issue-tracker-jira/shared/issueUrl";
 import * as Context from "effect/Context";
 import * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as SqlClient from "effect/sql/SqlClient";
+import * as Stream from "effect/Stream";
 
+import { IssueService } from "../issue/IssueService.ts";
 import { listLinkedIssueThreads } from "../issue/linkedThreads.ts";
+import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 
 export interface LinkThreadIssueInput {
@@ -119,3 +126,133 @@ const make = Effect.gen(function* () {
 });
 
 export const layer = Layer.effect(ThreadIssueService, make);
+
+const MAX_JIRA_MENTIONS_PER_MESSAGE = 10;
+const RECENT_MENTION_MESSAGES = 512;
+
+function jiraMentions(text: string) {
+  const keys = new Map<string, string>();
+  const links = new Map<string, { readonly key: string; readonly url: string }>();
+  for (const match of text.matchAll(
+    /https?:\/\/[^\s<>()[\]"'`]+|\b([A-Z][A-Z0-9_]*)-([1-9][0-9]*)\b/gu,
+  )) {
+    const [mention, scope] = match;
+    if (scope !== undefined) {
+      keys.set(mention, scope);
+      continue;
+    }
+    const url = URL.parse(mention.replace(/[.,!?;:]+$/u, ""));
+    const link = url === null ? null : parseJiraIssueUrl(url);
+    if (url !== null && link !== null) {
+      links.set(`${link.workspace}/${link.key}`, {
+        key: link.key,
+        url: `${url.origin}/browse/${link.key}`,
+      });
+    }
+  }
+  for (const link of links.values()) keys.delete(link.key);
+  return { keys, links };
+}
+
+function jiraMentionMessage(event: OrchestrationV2DomainEvent) {
+  if (event.type !== "message.updated") return;
+  const message = event.payload;
+  if (message.streaming || message.runId === null) return;
+  if (
+    message.role === "assistant" ||
+    (message.role === "user" &&
+      message.createdBy === "user" &&
+      message.workflowScript !== true &&
+      message.idleCompaction === undefined)
+  ) {
+    return message;
+  }
+}
+
+export const layerMentionObserver = Layer.effectDiscard(
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const issues = yield* IssueService;
+    const threadIssues = yield* ThreadIssueService;
+    const scanned = new Set<MessageId>();
+
+    const attach = Effect.fn("ThreadIssueService.attachMentions")(function* (
+      message: NonNullable<ReturnType<typeof jiraMentionMessage>>,
+    ) {
+      const { id, threadId, text } = message;
+      if (scanned.has(id)) return;
+      const { keys, links } = jiraMentions(text);
+      if (keys.size === 0 && links.size === 0) return;
+      if (scanned.size === RECENT_MENTION_MESSAGES) {
+        const oldest = scanned.values().next();
+        if (!oldest.done) scanned.delete(oldest.value);
+      }
+      scanned.add(id);
+      const { thread } = yield* orchestrator.getThreadRecords(threadId, []);
+      if (thread.deletedAt !== null) return;
+      const dismissed = (key: string) => thread.dismissedJiraIssueKeys?.includes(key) === true;
+      const alreadyLinked = (key: string, url?: string) =>
+        thread.issues?.some(
+          (link) =>
+            link.tracker === JIRA_KIND &&
+            link.key === key &&
+            (url === undefined || URL.parse(link.url)?.hostname === URL.parse(url)?.hostname),
+        ) === true;
+      const linkIssue = (issue: IssueDetail) =>
+        threadIssues.link({
+          threadId,
+          ref: issue,
+          url: issue.url,
+          displayKey: issue.displayKey,
+          title: issue.title,
+          source: "automatic",
+        });
+
+      let remaining = MAX_JIRA_MENTIONS_PER_MESSAGE;
+      for (const { key, url } of links.values()) {
+        if (remaining === 0) return;
+        if (alreadyLinked(key, url) || dismissed(key)) continue;
+        remaining--;
+        const resolved = yield* issues.resolveUrl(url, thread.projectId).pipe(Effect.option);
+        if (
+          resolved._tag === "Some" &&
+          resolved.value.tracker === JIRA_KIND &&
+          resolved.value.issue !== undefined
+        ) {
+          yield* linkIssue(resolved.value.issue);
+        }
+      }
+      if (keys.size === 0 || remaining === 0) return;
+      const projectScope = yield* issues.projectScope(thread.projectId).pipe(Effect.option);
+      if (projectScope._tag === "None" || projectScope.value.tracker !== JIRA_KIND) return;
+      for (const [key, scope] of keys) {
+        if (remaining === 0) return;
+        if (alreadyLinked(key) || dismissed(key)) continue;
+        remaining--;
+        const issue = yield* issues
+          .detail({ ...projectScope.value, scope, key })
+          .pipe(Effect.option);
+        if (issue._tag === "Some") yield* linkIssue(issue.value);
+      }
+    });
+
+    yield* forkParked(
+      orchestrator.streamDomainEvents.pipe(
+        Stream.runForEach((event) => {
+          const message = jiraMentionMessage(event);
+          return message === undefined
+            ? Effect.void
+            : attach(message).pipe(
+                Effect.catch((error) =>
+                  Effect.logWarning("Could not attach Jira issue mentions", {
+                    threadId: event.threadId,
+                    error,
+                  }),
+                ),
+              );
+        }),
+        Effect.catch((error) => Effect.logWarning("Jira issue mention observer stopped", error)),
+      ),
+    );
+  }),
+);

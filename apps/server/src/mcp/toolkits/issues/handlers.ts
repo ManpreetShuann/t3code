@@ -229,6 +229,12 @@ const make = Effect.gen(function* () {
             state: pullRequest.state,
             closesIssue: pullRequest.closesIssue,
           })),
+          ...(detail.issueType === undefined ? {} : { issueType: detail.issueType }),
+          ...(detail.priority === undefined ? {} : { priority: detail.priority }),
+          ...(detail.parent === undefined ? {} : { parent: detail.parent }),
+          ...(detail.subtasks === undefined ? {} : { subtasks: detail.subtasks }),
+          ...(detail.linkedIssues === undefined ? {} : { linkedIssues: detail.linkedIssues }),
+          ...(detail.attachments === undefined ? {} : { attachments: detail.attachments }),
         };
       }),
     ),
@@ -241,6 +247,7 @@ const make = Effect.gen(function* () {
           body: input.body ?? "",
           labels: input.labels ?? [],
           assignees: input.assignees ?? [],
+          ...(input.issueType === undefined ? {} : { issueType: input.issueType }),
         });
         return {
           ...scope,

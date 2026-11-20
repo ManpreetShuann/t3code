@@ -20,6 +20,19 @@ describe("issuesSearchFromUrl", () => {
       order: "created",
     });
     expect(
+      issuesSearchFromUrl({
+        who: "assigned-or-authored",
+        issueType: [" Bug ", "Task"],
+        assignee: "Avery",
+        assigneeId: "jira-account-id",
+      }),
+    ).toMatchObject({
+      who: "assigned-or-authored",
+      issueType: ["Bug", "Task"],
+      assignee: "Avery",
+      assigneeId: "jira-account-id",
+    });
+    expect(
       issuesSearchFromUrl({ hideProjects: [["env", "web"], ["env"], "api", ["env", 3]] })
         .hideProjects,
     ).toEqual([

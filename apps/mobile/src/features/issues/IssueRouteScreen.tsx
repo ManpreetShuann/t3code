@@ -1,16 +1,21 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
 import { StackActions, useNavigation, type StaticScreenProps } from "@react-navigation/native";
-import { issueEventSentence } from "@t3tools/client-runtime/issue-presentation";
-import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
+import {
+  issueEventSentence,
+  issueLinksOpenInApp,
+} from "@t3tools/client-runtime/issue-presentation";
 import { createIssueCommentPager } from "@t3tools/client-runtime/state/issues";
 import { visibleLinkedThreads } from "@t3tools/client-runtime/state/threads";
 import type {
+  IssueAttachment,
   IssueComment,
   IssueCommentAudience,
   IssueEvent,
   IssueEventReference,
+  IssueLinkedIssue,
   IssueLinkedPullRequest,
   IssueReaction,
+  IssueRelationRef,
   IssueState,
   IssueSummary,
 } from "@t3tools/contracts";
@@ -253,8 +258,7 @@ function LinkedPullRequests(props: {
 }) {
   const gt = useGT();
   const navigation = useNavigation();
-  // Only a git host's tracker shares its host with the change request it links.
-  const sameHost = sourceControlClients.find(props.params.tracker) !== undefined;
+  const sameHost = issueLinksOpenInApp(props.params.tracker);
   return (
     <View className="gap-2">
       <PullRequestSectionHeading>
@@ -302,6 +306,66 @@ function LinkedPullRequests(props: {
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+function IssueRelationsSection(props: {
+  readonly title: string;
+  readonly items: ReadonlyArray<IssueRelationRef | IssueLinkedIssue>;
+}) {
+  if (props.items.length === 0) return null;
+  return (
+    <View className="gap-2">
+      <PullRequestSectionHeading>{props.title}</PullRequestSectionHeading>
+      {props.items.map((item) => {
+        const relation = "relation" in item ? item.relation : null;
+        return (
+          <Pressable
+            key={`${relation ?? ""}:${item.key}`}
+            accessibilityRole="link"
+            onPress={() => void Linking.openURL(item.url)}
+            className="flex-row items-center gap-2 rounded-2xl bg-grouped-card p-3 active:opacity-70"
+          >
+            <View className="min-w-0 flex-1">
+              <Text className="text-sm" numberOfLines={2}>
+                {item.title}
+              </Text>
+              <Text className="font-mono text-2xs text-foreground-muted" numberOfLines={1}>
+                {relation ? `${relation} · ` : ""}
+                {item.key}
+                {item.state ? ` · ${item.state.name}` : ""}
+              </Text>
+            </View>
+            <SymbolView name="chevron.right" size={12} tintColorClassName="accent-icon-muted" />
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function IssueAttachmentsSection(props: { readonly attachments: ReadonlyArray<IssueAttachment> }) {
+  if (props.attachments.length === 0) return null;
+  return (
+    <View className="gap-2">
+      <PullRequestSectionHeading>
+        <T>Attachments</T>
+      </PullRequestSectionHeading>
+      {props.attachments.map((file) => (
+        <Pressable
+          key={file.id}
+          accessibilityRole="link"
+          onPress={() => void Linking.openURL(file.url)}
+          className="flex-row items-center gap-2 rounded-2xl bg-grouped-card p-3 active:opacity-70"
+        >
+          <SymbolView name="doc" size={14} tintColorClassName="accent-icon-muted" />
+          <Text className="min-w-0 flex-1 text-sm" numberOfLines={1}>
+            {file.filename}
+          </Text>
+          <SymbolView name="chevron.right" size={12} tintColorClassName="accent-icon-muted" />
+        </Pressable>
+      ))}
     </View>
   );
 }
@@ -749,6 +813,12 @@ function IssueRoute({ params }: { readonly params: IssueParams }) {
                   )
                 ) : (
                   <>
+                    {detail.issueType || detail.priority ? (
+                      <View className="flex-row flex-wrap gap-1.5">
+                        {detail.issueType ? <Chip label={detail.issueType} /> : null}
+                        {detail.priority ? <Chip label={detail.priority} /> : null}
+                      </View>
+                    ) : null}
                     <PullRequestDescription
                       markdown={detail.body}
                       footer={
@@ -761,6 +831,21 @@ function IssueRoute({ params }: { readonly params: IssueParams }) {
                         ) : undefined
                       }
                     />
+                    {detail.parent ? (
+                      <IssueRelationsSection title={gt("Parent")} items={[detail.parent]} />
+                    ) : null}
+                    {detail.subtasks && detail.subtasks.length > 0 ? (
+                      <IssueRelationsSection title={gt("Subtasks")} items={detail.subtasks} />
+                    ) : null}
+                    {detail.linkedIssues && detail.linkedIssues.length > 0 ? (
+                      <IssueRelationsSection
+                        title={gt("Linked issues")}
+                        items={detail.linkedIssues}
+                      />
+                    ) : null}
+                    {detail.attachments && detail.attachments.length > 0 ? (
+                      <IssueAttachmentsSection attachments={detail.attachments} />
+                    ) : null}
                     {detail.linkedPullRequests.length > 0 ? (
                       <LinkedPullRequests params={params} links={detail.linkedPullRequests} />
                     ) : null}

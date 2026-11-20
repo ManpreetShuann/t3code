@@ -59,8 +59,13 @@ export const IssueSavedView = Schema.Struct({
   involvement: IssueInvolvement,
   sort: IssueListSort,
   labels: Schema.Array(Schema.String),
+  issueTypes: Schema.optional(Schema.Array(Schema.String)),
   assignee: Schema.NullOr(
-    Schema.Struct({ login: Schema.String, name: Schema.NullOr(Schema.String) }),
+    Schema.Struct({
+      login: Schema.String,
+      name: Schema.NullOr(Schema.String),
+      accountId: Schema.optional(Schema.String),
+    }),
   ),
 });
 export type IssueSavedView = typeof IssueSavedView.Type;

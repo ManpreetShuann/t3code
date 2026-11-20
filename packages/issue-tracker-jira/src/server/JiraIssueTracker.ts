@@ -6,22 +6,27 @@
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
-import {
-  type IssueActor,
-  type IssueCapabilities,
-  type IssueComment,
-  type IssueEvent,
-  type IssueInvolvement,
-  type IssueState,
-  type IssueViewerPermissions,
-  type StandaloneIssueTrackerDescriptor,
+import type {
+  IssueActor,
+  IssueAttachment,
+  IssueCapabilities,
+  IssueComment,
+  IssueEvent,
+  IssueLinkedIssue,
+  IssueLinkedPullRequest,
+  IssueRelationRef,
+  IssueState,
+  IssueViewerPermissions,
+  StandaloneIssueTrackerDescriptor,
 } from "@t3tools/contracts";
 import type {
+  IssueInvolvementFilter,
   IssueTrackerError,
   StandaloneIssueTrackerApi,
   TrackerIssueSummary,
 } from "@t3tools/source-control-core/server/IssueTracker";
 
+import { JIRA_HOST, parseJiraIssueUrl } from "../shared/issueUrl.ts";
 import { adfToMarkdown, hasUnwritableContent, markdownToAdf } from "./adf.ts";
 import * as JiraApi from "./JiraApi.ts";
 
@@ -29,7 +34,7 @@ const DESCRIPTOR: StandaloneIssueTrackerDescriptor = {
   tracker: JiraApi.KIND,
   displayName: "Jira",
   // Every Jira Cloud site; the one this server reads is part of the saved credential.
-  host: "atlassian.net",
+  host: JIRA_HOST,
   scopeNoun: "project",
   credential: {
     label: "API token",
@@ -41,17 +46,10 @@ const DESCRIPTOR: StandaloneIssueTrackerDescriptor = {
   },
 };
 
-/** `https://<site>.atlassian.net/browse/<PROJECT>-<n>`, keeping the site as the workspace. */
-export function parseJiraIssueUrl(url: URL) {
-  const site = url.hostname.toLowerCase();
-  if (url.protocol !== "https:" || !site.endsWith(`.${DESCRIPTOR.host}`)) return null;
-  const [, resource, key] = url.pathname.split("/");
-  if (resource !== "browse" || key === undefined) return null;
-  const scope = /^([A-Z][A-Z0-9_]*)-[1-9][0-9]*$/.exec(key)?.[1];
-  return scope === undefined ? null : { host: DESCRIPTOR.host, workspace: site, scope, key };
-}
-
-/** No reactions or development panel: Jira Cloud's public API serves neither. */
+/**
+ * No reactions: Jira Cloud's public API has none. Templates are the project's issue types, and
+ * linked pull requests come from the development panel.
+ */
 const CAPABILITIES: IssueCapabilities = {
   create: true,
   edit: true,
@@ -59,8 +57,8 @@ const CAPABILITIES: IssueCapabilities = {
   labels: true,
   assignees: true,
   reactions: false,
-  templates: false,
-  linkedPullRequests: false,
+  templates: true,
+  linkedPullRequests: true,
   events: true,
   search: true,
   internalComments: true,
@@ -149,6 +147,100 @@ function toStates(issue: JiraApi.JiraIssue): IssueState[] {
   return [...byName.values()].toSorted((a, b) => rank(a) - rank(b)).map(toState);
 }
 
+const issueUrl = (origin: string, key: string) => `${origin}/browse/${key}`;
+
+function toRelationRef(origin: string, related: JiraApi.JiraRelatedIssue): IssueRelationRef {
+  return {
+    key: related.key,
+    title: related.fields?.summary?.trim() || related.key,
+    url: issueUrl(origin, related.key),
+    ...(related.fields?.status ? { state: toState(related.fields.status) } : {}),
+  };
+}
+
+function toLinkedIssues(
+  origin: string,
+  links: ReadonlyArray<JiraApi.JiraIssueLink>,
+): IssueLinkedIssue[] {
+  return links.flatMap((link) => {
+    if (link.outwardIssue) {
+      return [
+        {
+          ...toRelationRef(origin, link.outwardIssue),
+          relation: link.type.outward?.trim() || link.type.name,
+        },
+      ];
+    }
+    if (link.inwardIssue) {
+      return [
+        {
+          ...toRelationRef(origin, link.inwardIssue),
+          relation: link.type.inward?.trim() || link.type.name,
+        },
+      ];
+    }
+    return [];
+  });
+}
+
+function toAttachments(attachments: ReadonlyArray<JiraApi.JiraAttachment>): IssueAttachment[] {
+  return attachments.flatMap((item) =>
+    item.filename.trim() === "" || item.content.trim() === ""
+      ? []
+      : [
+          {
+            id: item.id,
+            filename: item.filename.trim(),
+            url: item.content,
+            mimeType: item.mimeType?.trim() || null,
+            size: typeof item.size === "number" && item.size >= 0 ? Math.trunc(item.size) : null,
+          },
+        ],
+  );
+}
+
+/** `<host>/<repository>/pull/1`, as GitHub, GitLab (`-/merge_requests`) or Bitbucket write it. */
+const PULL_REQUEST_URL =
+  /^https:\/\/[^/]+\/(.+?)\/(?:pull|-\/merge_requests|pull-requests)\/(\d+)\/?(?:[?#]|$)/u;
+
+function toLinkedPullRequests(
+  pulls: ReadonlyArray<JiraApi.JiraPullRequest>,
+): IssueLinkedPullRequest[] {
+  const seen = new Set<string>();
+  return pulls.flatMap((pull) => {
+    const match = PULL_REQUEST_URL.exec(pull.url);
+    if (match === null || seen.has(pull.url)) return [];
+    seen.add(pull.url);
+    const status = pull.status?.toUpperCase();
+    return [
+      {
+        repository: match[1]!,
+        number: Number(match[2]),
+        title: pull.name.trim() || pull.url,
+        url: pull.url,
+        state:
+          status === "MERGED"
+            ? "merged"
+            : status === "OPEN" || status === "DRAFT"
+              ? "open"
+              : "closed",
+        isDraft: status === "DRAFT",
+        closesIssue: false,
+      },
+    ];
+  });
+}
+
+/** Splits an optional trailing `ORDER BY ...` off a raw `jql:` search. */
+function parseRawJql(query: string) {
+  if (!/^jql:/iu.test(query)) return null;
+  const raw = query.slice(4).trim();
+  const match = /\border\s+by\s+(.+)$/iu.exec(raw);
+  return match === null
+    ? { predicate: raw, orderBy: null }
+    : { predicate: raw.slice(0, match.index).trim(), orderBy: match[1]!.trim() || null };
+}
+
 function toComment(comment: JiraApi.JiraComment, issueUrl: string): IssueComment {
   return {
     id: comment.id,
@@ -216,8 +308,8 @@ function toEvents(histories: ReadonlyArray<JiraApi.JiraHistory>): IssueEvent[] {
 /** A JQL string literal. */
 const quoted = (value: string) => `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 
-function involvementClause(involvement: IssueInvolvement): string | null {
-  switch (involvement) {
+function involvementClause(filter: IssueInvolvementFilter): string | null {
+  switch (filter.involvement) {
     case "assigned":
       return "assignee = currentUser()";
     case "authored":
@@ -229,6 +321,13 @@ function involvementClause(involvement: IssueInvolvement): string | null {
       return null;
   }
 }
+
+/** Marked as Jira's, so a picker filters by the account id and lets Jira match the search. */
+const toCandidate = (user: JiraApi.JiraUser) => ({
+  ...toActor(user),
+  id: user.accountId,
+  tracker: "jira" as const,
+});
 
 const sameText = (a: string | null | undefined, b: string) =>
   a != null && a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -351,33 +450,47 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
         const origin = yield* jira.origin;
         // The filter names a person as issues do; JQL is only exact about an account id.
         const assignee =
-          input.assignee === undefined
+          input.assigneeId ??
+          (input.assignee === undefined
             ? null
             : ((yield* jira.findUsers(input.assignee)).find((user) =>
                 sameText(user.displayName, input.assignee!),
-              )?.accountId ?? input.assignee);
+              )?.accountId ?? input.assignee));
+        // `jql:` hands the rest to Jira as written, ANDed with the project and filters.
+        const rawJql = input.query === undefined ? null : parseRawJql(input.query.trim());
+        const text = rawJql === null ? input.query : undefined;
         // `ENG-12`, `#12` or `12` also asks for that one issue of this project.
         const reference =
-          input.query === undefined
+          text === undefined
             ? null
-            : new RegExp(`^(?:${project}-|#)?([1-9]\\d*)$`, "iu").exec(input.query.trim());
+            : new RegExp(`^(?:${project}-|#)?([1-9]\\d*)$`, "iu").exec(text.trim());
+        const involvement =
+          input.jiraInvolvement === "assigned-or-authored"
+            ? "(assignee = currentUser() OR reporter = currentUser())"
+            : involvementClause(input);
+        const orderBy =
+          rawJql?.orderBy ?? `${input.sort === "created" ? "created" : "updated"} DESC`;
         const jql = (withReference: boolean) =>
           [
             `project = ${quoted(project)}`,
             ...(input.state === "all"
               ? []
               : [`statusCategory ${input.state === "closed" ? "=" : "!="} Done`]),
-            ...[involvementClause(input.involvement)].filter((clause) => clause !== null),
+            ...(involvement === null ? [] : [involvement]),
             ...(assignee === null ? [] : [`assignee = ${quoted(assignee)}`]),
             ...(input.labels ?? []).map((label) => `labels = ${quoted(label)}`),
-            ...(input.query === undefined
+            ...(input.issueTypes?.length
+              ? [`issuetype in (${input.issueTypes.map(quoted).join(", ")})`]
+              : []),
+            ...(rawJql === null || rawJql.predicate === "" ? [] : [`(${rawJql.predicate})`]),
+            ...(text === undefined
               ? []
               : [
                   reference !== null && withReference
-                    ? `(text ~ ${quoted(input.query)} OR key = ${quoted(`${project}-${reference[1]}`)})`
-                    : `text ~ ${quoted(input.query)}`,
+                    ? `(text ~ ${quoted(text)} OR key = ${quoted(`${project}-${reference[1]}`)})`
+                    : `text ~ ${quoted(text)}`,
                 ]),
-          ].join(" AND ") + ` ORDER BY ${input.sort === "created" ? "created" : "updated"} DESC`;
+          ].join(" AND ") + ` ORDER BY ${orderBy}`;
         const run = (withReference: boolean) =>
           jira.search({ jql: jql(withReference), limit: input.limit, pageToken: input.cursor });
         const page = yield* run(true).pipe(
@@ -412,6 +525,14 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
           ],
           { concurrency: 5 },
         );
+        // An undocumented API: when it moves or refuses, the issue still opens.
+        const pulls = yield* jira.pullRequests(issue.id).pipe(Effect.orElseSucceed(() => []));
+        const { fields } = issue;
+        const issueType = fields.issuetype?.name.trim() || undefined;
+        const priority = fields.priority?.name.trim() || undefined;
+        const subtasks = (fields.subtasks ?? []).map((sub) => toRelationRef(origin, sub));
+        const linkedIssues = toLinkedIssues(origin, fields.issuelinks ?? []);
+        const attachments = toAttachments(fields.attachment ?? []);
         const summary = toSummary(issue, origin, page.total);
         return {
           ...summary,
@@ -434,7 +555,13 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
             : {}),
           commentsCursor: page.total > page.comments.length ? String(page.comments.length) : null,
           events: toEvents(issue.changelog?.histories ?? []),
-          linkedPullRequests: [],
+          linkedPullRequests: toLinkedPullRequests(pulls),
+          ...(issueType === undefined ? {} : { issueType }),
+          ...(priority === undefined ? {} : { priority }),
+          ...(fields.parent == null ? {} : { parent: toRelationRef(origin, fields.parent) }),
+          ...(subtasks.length === 0 ? {} : { subtasks }),
+          ...(linkedIssues.length === 0 ? {} : { linkedIssues }),
+          ...(attachments.length === 0 ? {} : { attachments }),
         };
       }),
 
@@ -452,6 +579,28 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
         };
       }),
 
+      listTemplates: Effect.fn("JiraIssueTracker.listTemplates")(function* (input) {
+        const types = yield* jira.issueTypes(projectKey(input.scope));
+        return {
+          templates: types.flatMap((type) =>
+            type.subtask
+              ? []
+              : [
+                  {
+                    key: type.name,
+                    name: type.name,
+                    about: type.description?.trim() ?? "",
+                    title: "",
+                    body: "",
+                    labels: [],
+                    assignees: [],
+                  },
+                ],
+          ),
+          blankIssuesEnabled: true,
+        };
+      }),
+
       create: Effect.fn("JiraIssueTracker.create")(function* (input) {
         const project = projectKey(input.scope);
         const [origin, types, labels, assignee] = yield* Effect.all([
@@ -460,15 +609,22 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
           labelNames("create", input.labels),
           accountId("create", input.scope, input.assignees),
         ]);
+        const standard = types.filter((candidate) => !candidate.subtask);
+        const requested = input.issueType?.trim() || undefined;
         // Jira files nothing without a type; a Task is the one nearly every project has.
         const type =
-          types.find((candidate) => candidate.name === "Task") ??
-          types.find((candidate) => !candidate.subtask);
+          requested === undefined
+            ? (standard.find((candidate) => candidate.name === "Task") ?? standard[0])
+            : standard.find(
+                (candidate) => candidate.id === requested || sameText(candidate.name, requested),
+              );
         if (type === undefined) {
           return yield* JiraApi.fail(
             "create",
             "failed",
-            `Jira project ${project} has no issue type this account can create.`,
+            requested === undefined
+              ? `Jira project ${project} has no issue type this account can create.`
+              : `Jira project ${project} has no issue type "${requested}". Available: ${standard.map((candidate) => candidate.name).join(", ") || "none"}.`,
           );
         }
         const created = yield* jira.createIssue({
@@ -543,17 +699,46 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
         yield* jira.transition(key, wanted.id);
       }),
 
-      listCandidates: (input) =>
-        Effect.all(
+      listCandidates: (input) => {
+        const project = projectKey(input.scope);
+        const startAt = input.offset ?? 0;
+        const query = input.query?.trim() || undefined;
+        switch (input.kind) {
+          case "issue-types":
+            return jira.projectIssueTypes(project).pipe(
+              Effect.map((types) => ({
+                labels: [],
+                assignees: [],
+                issueTypes: [...new Set(types.map((type) => type.name))],
+                truncated: false,
+              })),
+            );
+          case "labels":
+            return jira.labelPage({ startAt, query }).pipe(
+              Effect.map((page) => ({
+                labels: page.names.map((name) => ({ name, color: null, description: null })),
+                assignees: [],
+                hasMore: page.hasMore,
+                truncated: page.hasMore,
+              })),
+            );
+          case "assignees":
+            return jira.assignablePage(project, { startAt, query }).pipe(
+              Effect.map((page) => ({
+                labels: [],
+                assignees: page.users.map(toCandidate),
+                hasMore: page.hasMore,
+                truncated: page.hasMore,
+              })),
+            );
+        }
+        return Effect.all(
           [
             // A person search does not need the label catalogue.
             input.query === undefined
               ? jira.labels
               : Effect.succeed({ names: [], truncated: false }),
-            jira.assignable(
-              projectKey(input.scope),
-              input.query === undefined ? undefined : { query: input.query },
-            ),
+            jira.assignable(project, input.query === undefined ? undefined : { query: input.query }),
           ],
           { concurrency: 2 },
         ).pipe(
@@ -561,12 +746,13 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
             labels: labels.names.flatMap((name) =>
               name.trim() ? [{ name, color: null, description: null }] : [],
             ),
-            assignees: people.users.map((user) => ({ ...toActor(user), id: user.accountId })),
+            assignees: people.users.map(toCandidate),
             // Jira filters each assignable page after reading it, so no page shows the list ended.
             assigneeSearch: true,
             truncated: labels.truncated || people.truncated,
           })),
-        ),
+        );
+      },
     };
     return api;
   },

@@ -453,9 +453,16 @@ const make = Effect.gen(function* () {
     const limit = input.limit ?? DEFAULT_LIST_LIMIT;
     // Worktrees of one repository are separate projects, and every repository of an Azure
     // DevOps project shares its work items; read each scope once.
+    const jiraInvolvement =
+      input.involvement === "assigned-or-authored" ? input.involvement : undefined;
+    const jiraOnly =
+      jiraInvolvement !== undefined ||
+      input.assigneeId !== undefined ||
+      (input.issueTypes?.length ?? 0) > 0;
     const scopes = new Map<string, SupportedProject>();
     for (const project of supported) {
       if (host !== undefined && project.host !== host) continue;
+      if (jiraOnly && project.tracker !== "jira") continue;
       const key = listCursorKey(project);
       if (!scopes.has(key)) scopes.set(key, project);
     }
@@ -543,6 +550,9 @@ const make = Effect.gen(function* () {
                 labels: input.labels,
                 assignee: input.assignee,
                 sort,
+                assigneeId: input.assigneeId,
+                issueTypes: input.issueTypes,
+                jiraInvolvement,
                 cursor,
                 refresh: input.refresh,
               }),
@@ -714,6 +724,7 @@ const make = Effect.gen(function* () {
           ? Effect.fail(unsupported("candidates", "labels or assignees"))
           : project.api
               .listCandidates({
+                ...input,
                 cwd: project.project.workspaceRoot,
                 host: project.host,
                 scope: project.scope,
@@ -737,6 +748,7 @@ const make = Effect.gen(function* () {
                 body: input.body,
                 labels: input.labels,
                 assignees: input.assignees,
+                ...(input.issueType === undefined ? {} : { issueType: input.issueType }),
               })
               .pipe(Effect.mapError(toIssueError("create"))),
       ),

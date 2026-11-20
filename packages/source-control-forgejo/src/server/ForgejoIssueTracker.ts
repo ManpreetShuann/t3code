@@ -9,13 +9,13 @@ import * as Schema from "effect/Schema";
 import {
   IssueTrackerKind,
   type IssueCapabilities,
-  type IssueInvolvement,
   type IssueLinkedPullRequest,
   type IssueViewerPermissions,
 } from "@t3tools/contracts";
 import { decodeJsonResult } from "@t3tools/shared/schemaJson";
 import {
   IssueTrackerError,
+  type IssueInvolvementFilter,
   type IssueTrackerApi,
 } from "@t3tools/source-control-core/server/IssueTracker";
 
@@ -62,7 +62,7 @@ const PAGE_SIZE = 50;
 /** How many pages of a listing with no cursor of its own are read before giving up on the rest. */
 const MAX_PAGES = 10;
 
-const INVOLVEMENT_PARAM: Record<Exclude<IssueInvolvement, "all">, string> = {
+const INVOLVEMENT_PARAM: Record<Exclude<IssueInvolvementFilter["involvement"], "all">, string> = {
   assigned: "assigned_by",
   authored: "created_by",
   mentioned: "mentioned_by",

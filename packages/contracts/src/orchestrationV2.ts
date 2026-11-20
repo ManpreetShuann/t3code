@@ -514,6 +514,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   /** Issues linked to this thread; optional so pre-linking servers still decode. */
   issues: Schema.optional(Schema.Array(ThreadIssueLink)),
+  dismissedJiraIssueKeys: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),

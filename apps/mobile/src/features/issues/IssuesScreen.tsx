@@ -5,6 +5,8 @@ import {
   groupIssues,
   holdIssuePages,
   issueFilterScopes,
+  issueInvolvementSelected,
+  toggleIssueInvolvement,
   issueOrder,
   type EnvironmentIssueEntry,
   type HeldIssuePage,
@@ -51,7 +53,7 @@ import { issueParamsKey } from "./issueParams";
 import { IssueListRow } from "./IssueListRow";
 import type { PullRequestFilterMenu } from "../pull-requests/PullRequestListFilters";
 import { issueListFiltersAtom, issueSearchQuery } from "./issueListFilters";
-import { issueViewMatches } from "./issueSavedViews";
+import { issueViewMatches, type IssueSavedViewScope } from "./issueSavedViews";
 import { SavedViewsMenu } from "../layout/workspace/SavedViewsMenu";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 
@@ -66,7 +68,7 @@ const INVOLVEMENT = {
   assigned: msg("Assigned to you"),
   authored: msg("Opened by you"),
   mentioned: msg("Mentioning you"),
-} as const satisfies Record<IssueInvolvement, string>;
+} as const satisfies Partial<Record<IssueInvolvement, string>>;
 const SORTS = {
   updated: msg("Recently updated"),
   created: msg("Newest", { $context: "sort order" }),
@@ -135,7 +137,7 @@ export function IssuesScreen(
   const [state, setState] = useState<IssueListState>("open");
   const [involvement, setInvolvement] = useState<IssueInvolvement>("all");
   const navigation = useNavigation();
-  const [{ labels, assignee }, setFilters] = useAtom(issueListFiltersAtom);
+  const [{ labels, issueTypes, assignee }, setFilters] = useAtom(issueListFiltersAtom);
   const { themeAppearance } = useAppearancePreferences();
   const [sort, setSort] = useState<IssueListSort>("updated");
   const listInput: IssueListInput = {
@@ -144,7 +146,12 @@ export function IssuesScreen(
     involvement,
     ...(query ? { query } : {}),
     ...(labels.length > 0 ? { labels } : {}),
-    ...(assignee === null ? {} : { assignee: assignee.login }),
+    ...(issueTypes.length > 0 ? { issueTypes } : {}),
+    ...(assignee?.accountId
+      ? { assigneeId: assignee.accountId }
+      : assignee === null
+        ? {}
+        : { assignee: assignee.login }),
     ...(sort === "updated" ? {} : { sort }),
   };
   const capable = environments.filter(
@@ -198,6 +205,23 @@ export function IssuesScreen(
   const groups = groupIssues(held, query, projects, sort);
   const entries = groups.flatMap((group) => group.rows).sort(issueOrder(sort));
   const filterScopes = issueFilterScopes(held, projects);
+  const hasJira = filterScopes.some(({ input }) => String(input.tracker) === "jira");
+  const showIssueTypes = hasJira || issueTypes.length > 0;
+  const multipleInvolvement = hasJira || involvement === "assigned-or-authored";
+  const involvementChoices = (field?: string) =>
+    (Object.entries(INVOLVEMENT) as Array<[keyof typeof INVOLVEMENT, string]>).map(
+      ([id, title]) => ({
+        id: field ? `${field}:${id}` : id,
+        title: messages(title),
+        state: issueInvolvementSelected(involvement, id) ? ("on" as const) : ("off" as const),
+      }),
+    );
+  const involvementLabel = involvementChoices()
+    .filter(({ state }) => state === "on")
+    .map(({ title }) => title)
+    .join(", ");
+  const selectInvolvement = (option: IssueInvolvement) =>
+    setInvolvement(multipleInvolvement ? toggleIssueInvolvement(involvement, option) : option);
   const notices = [
     // An environment that failed while another answered: its issues are missing from the rows.
     ...(entries.length > 0 && list.error ? [list.error] : []),
@@ -238,6 +262,7 @@ export function IssuesScreen(
     involvement !== "all" ||
     sort !== "updated" ||
     labels.length > 0 ||
+    issueTypes.length > 0 ||
     assignee !== null;
   // The Android header's filter button opens every filter, as the pull request list's does.
   const headerMenu: PullRequestFilterMenu | null =
@@ -252,7 +277,7 @@ export function IssuesScreen(
             {
               id: "involvement",
               title: gt("Involvement"),
-              subactions: choices(INVOLVEMENT, involvement, messages, "involvement"),
+              subactions: involvementChoices("involvement"),
             },
             {
               id: "labels",
@@ -261,6 +286,17 @@ export function IssuesScreen(
                   ? gt("Labels…")
                   : gt("Labels ({count})…", { count: labels.length }),
             },
+            ...(showIssueTypes
+              ? [
+                  {
+                    id: "issue-types",
+                    title:
+                      issueTypes.length === 0
+                        ? gt("Issue types…")
+                        : gt("Issue types ({count})…", { count: issueTypes.length }),
+                  },
+                ]
+              : []),
             {
               id: "assignee",
               title:
@@ -282,15 +318,15 @@ export function IssuesScreen(
           onSelect: (id) => {
             const [field, value] = id.split(":");
             if (field === "state") setState(value as IssueListState);
-            if (field === "involvement") setInvolvement(value as IssueInvolvement);
+            if (field === "involvement") selectInvolvement(value as IssueInvolvement);
             if (field === "sort") setSort(value as IssueListSort);
-            if (field === "labels" || field === "assignee")
+            if (field === "labels" || field === "assignee" || field === "issue-types")
               navigation.navigate("IssueFilterSearch", { kind: field, scopes: filterScopes });
             if (field === "reset") {
               setState("open");
               setInvolvement("all");
               setSort("updated");
-              setFilters({ labels: [], assignee: null });
+              setFilters({ labels: [], issueTypes: [], assignee: null });
             }
           },
           customized,
@@ -358,7 +394,7 @@ export function IssuesScreen(
                   : FILTER_ROW_STYLE
               }
             >
-              <SavedViewsMenu
+              <SavedViewsMenu<IssueSavedViewScope>
                 read={(preferences) => preferences.issueSavedViews}
                 write={(issueSavedViews) => ({ issueSavedViews })}
                 list="issue"
@@ -370,13 +406,18 @@ export function IssuesScreen(
                   involvement,
                   sort,
                   labels,
+                  issueTypes,
                   assignee,
                 }}
                 onApply={(view) => {
                   setState(view.state);
                   setInvolvement(view.involvement);
                   setSort(view.sort);
-                  setFilters({ labels: view.labels, assignee: view.assignee });
+                  setFilters({
+                    labels: view.labels,
+                    issueTypes: view.issueTypes ?? [],
+                    assignee: view.assignee,
+                  });
                   const viewQuery = view.query.trim();
                   workspace.dispatch(
                     viewQuery
@@ -398,12 +439,12 @@ export function IssuesScreen(
                 }}
               />
               <ListFilterMenu
-                label={messages(INVOLVEMENT[involvement])}
+                label={involvementLabel}
                 active={involvement !== "all"}
                 accessibilityLabel={gt("Filter by involvement")}
-                actions={choices(INVOLVEMENT, involvement, messages)}
+                actions={involvementChoices()}
                 onSelect={(id) => {
-                  setInvolvement(id as IssueInvolvement);
+                  selectInvolvement(id as IssueInvolvement);
                   scrollToTop();
                 }}
               />
@@ -424,6 +465,28 @@ export function IssuesScreen(
                   navigation.navigate("IssueFilterSearch", { kind: "labels", scopes: filterScopes })
                 }
               />
+              {showIssueTypes ? (
+                <Chip
+                  label={
+                    issueTypes.length === 0
+                      ? gt("Issue types")
+                      : issueTypes.length === 1
+                        ? issueTypes[0]!
+                        : gt("Issue types {count}", { count: issueTypes.length })
+                  }
+                  selected={issueTypes.length > 0}
+                  trailingIcon="chevron.down"
+                  glass
+                  colorScheme={themeAppearance}
+                  accessibilityLabel={gt("Filter by issue type")}
+                  onPress={() =>
+                    navigation.navigate("IssueFilterSearch", {
+                      kind: "issue-types",
+                      scopes: filterScopes,
+                    })
+                  }
+                />
+              ) : null}
               <Chip
                 label={assignee === null ? gt("Assignee") : (assignee.name ?? assignee.login)}
                 selected={assignee !== null}

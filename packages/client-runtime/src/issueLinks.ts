@@ -6,6 +6,11 @@ import {
   type RepositoryIdentity,
 } from "@t3tools/contracts";
 import {
+  JIRA_HOST,
+  JIRA_KIND,
+  parseJiraIssueUrl,
+} from "@t3tools/issue-tracker-jira/shared/issueUrl";
+import {
   LINEAR_HOST,
   LINEAR_KIND,
   parseLinearIssueUrl,
@@ -61,10 +66,19 @@ function parseIssueLink(
   return null;
 }
 
+const STANDALONE_TRACKERS = [
+  { tracker: LINEAR_KIND, parse: parseLinearIssueUrl },
+  { tracker: JIRA_KIND, parse: parseJiraIssueUrl },
+];
+
 function parseStandaloneIssueLink(url: string) {
   try {
-    const link = parseLinearIssueUrl(new URL(url));
-    return link === null ? null : { tracker: LINEAR_KIND, link };
+    const parsed = new URL(url);
+    for (const { tracker, parse } of STANDALONE_TRACKERS) {
+      const link = parse(parsed);
+      if (link !== null) return { tracker, link };
+    }
+    return null;
   } catch {
     return null;
   }
@@ -82,7 +96,12 @@ const LINEAR_LINK_HINT_PATTERN = new RegExp(
 
 /** A cheap pre-check, so text without such a link never asks for the bindings. */
 export function mayContainStandaloneIssueLink(text: string): boolean {
-  return LINEAR_LINK_HINT_PATTERN.test(text);
+  const lower = text.toLowerCase();
+  return (
+    LINEAR_LINK_HINT_PATTERN.test(text) ||
+    lower.includes(`${LINEAR_HOST}/`) ||
+    lower.includes(`.${JIRA_HOST}/`)
+  );
 }
 
 /**

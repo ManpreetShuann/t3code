@@ -7,16 +7,31 @@ import * as Schema from "effect/Schema";
 import { issueSearchQuery, unofferedIssueFilters } from "./issueListFilters";
 
 it("keeps the picks the listed scopes no longer offer", () => {
-  const offered = { labels: [{ name: "bug" }], assignees: [{ login: "alice" }] };
+  const offered = {
+    labels: [{ name: "bug" }],
+    issueTypes: ["Task"],
+    assignees: [{ login: "alice" }, { login: "Bob", id: "jira-2", tracker: "jira" as const }],
+  };
   expect(
     unofferedIssueFilters(
-      { labels: ["bug", "gone"], assignee: { login: "bob", name: "Bob" } },
+      {
+        labels: ["bug", "gone"],
+        issueTypes: ["Task", "Bug"],
+        assignee: { login: "Bob", name: "Bob", accountId: "jira-1" },
+      },
       offered,
     ),
-  ).toEqual({ labels: ["gone"], assignee: { login: "bob", name: "Bob" } });
+  ).toEqual({
+    labels: ["gone"],
+    issueTypes: ["Bug"],
+    assignee: { login: "Bob", name: "Bob", accountId: "jira-1" },
+  });
   expect(
-    unofferedIssueFilters({ labels: ["bug"], assignee: { login: "alice", name: null } }, offered),
-  ).toEqual({ labels: [], assignee: null });
+    unofferedIssueFilters(
+      { labels: ["bug"], issueTypes: [], assignee: { login: "alice", name: null } },
+      offered,
+    ),
+  ).toEqual({ labels: [], issueTypes: [], assignee: null });
 });
 
 it("searches a pasted wall of text by its start within the server's limit", () => {

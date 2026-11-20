@@ -13,6 +13,7 @@ export const IssueGlyph = { issue: CircleDotIcon } as const;
 
 /** Name and mark per standalone tracker kind; one missing here falls back to its kind and a ticket. */
 const STANDALONE_TRACKERS: Partial<Record<string, { providerName: string; Icon: Icon }>> = {
+  jira: { providerName: "Jira", Icon: JiraIcon },
   linear: { providerName: "Linear", Icon: LinearIcon },
   jira: { providerName: "Jira", Icon: JiraIcon },
 };

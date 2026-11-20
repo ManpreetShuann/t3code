@@ -6,7 +6,6 @@ import {
   IssueTrackerKind,
   type IssueCapabilities,
   type IssueActor,
-  type IssueInvolvement,
   type IssueLabel,
   type IssueListSort,
 } from "@t3tools/contracts";
@@ -76,7 +75,10 @@ function searchTerms(query: string): ReadonlyArray<string> {
     .map(quotedTerm);
 }
 
-const INVOLVEMENT_QUALIFIER: Record<Exclude<IssueInvolvement, "all">, string> = {
+const INVOLVEMENT_QUALIFIER: Record<
+  Exclude<IssueInvolvementFilter["involvement"], "all">,
+  string
+> = {
   assigned: "assignee",
   authored: "author",
   mentioned: "mentions",

@@ -15,14 +15,14 @@ interface Candidate {
   readonly key: string;
   readonly title: string;
   readonly subtitle?: string;
-  readonly leading: ReactNode;
+  readonly leading?: ReactNode;
   readonly selected: boolean;
 }
 
 /** The searchable checklist behind the label and assignee pickers. */
 export function IssueCandidatesSheet(props: {
   readonly title: string;
-  readonly noun: "labels" | "people";
+  readonly noun: "labels" | "people" | "issue-types";
   readonly query: string;
   readonly onQueryChange: (query: string) => void;
   readonly candidates: ReadonlyArray<Candidate>;
@@ -32,15 +32,19 @@ export function IssueCandidatesSheet(props: {
   readonly loadError: string | null;
   readonly onRetry: () => void;
   readonly truncated: boolean;
+  readonly onLoadMore?: (() => void) | undefined;
   readonly onToggle: (key: string) => void;
 }) {
   const gt = useGT();
   const labels = props.noun === "labels";
+  const issueTypes = props.noun === "issue-types";
   const searching = props.query.trim().length > 0;
   return (
     <PullRequestSearchSheet
       title={props.title}
-      placeholder={labels ? gt("Search labels") : gt("Search people")}
+      placeholder={
+        labels ? gt("Search labels") : issueTypes ? gt("Search issue types") : gt("Search people")
+      }
       closeAccessibilityLabel={gt("Close {title}", { title: props.title.toLowerCase() })}
       clearAccessibilityLabel={gt("Clear search")}
       query={props.query}
@@ -94,14 +98,20 @@ export function IssueCandidatesSheet(props: {
                     props.loadError
                       ? labels
                         ? gt("Couldn't load labels")
-                        : gt("Couldn't load people")
+                        : issueTypes
+                          ? gt("Couldn't load issue types")
+                          : gt("Couldn't load people")
                       : searching
                         ? labels
                           ? gt("No matching labels")
-                          : gt("No matching people")
+                          : issueTypes
+                            ? gt("No matching issue types")
+                            : gt("No matching people")
                         : labels
                           ? gt("This tracker has no labels")
-                          : gt("Nobody can be assigned here")
+                          : issueTypes
+                            ? gt("This tracker has no issue types")
+                            : gt("Nobody can be assigned here")
                   }
                   detail={
                     props.loadError ??
@@ -116,11 +126,17 @@ export function IssueCandidatesSheet(props: {
             )
           }
           ListFooterComponent={
-            props.truncated ? (
+            props.onLoadMore ? (
+              <View className="items-start py-4">
+                <Button label={gt("Load more")} size="compact" onPress={props.onLoadMore} />
+              </View>
+            ) : props.truncated ? (
               <Text className="py-4 text-xs text-foreground-muted">
                 {labels
                   ? gt("More labels exist than are listed here.")
-                  : gt("More people exist than are listed here.")}
+                  : issueTypes
+                    ? gt("More issue types exist than are listed here.")
+                    : gt("More people exist than are listed here.")}
               </Text>
             ) : undefined
           }
