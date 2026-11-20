@@ -57,7 +57,13 @@ export type IssueState = typeof IssueState.Type;
 export const IssueListState = Schema.Literals(["all", "open", "closed"]);
 export type IssueListState = typeof IssueListState.Type;
 
-export const IssueInvolvement = Schema.Literals(["all", "assigned", "authored", "mentioned"]);
+export const IssueInvolvement = Schema.Literals([
+  "all",
+  "assigned",
+  "authored",
+  "mentioned",
+  "assigned-or-authored",
+]);
 export type IssueInvolvement = typeof IssueInvolvement.Type;
 
 /** Newest first by the named date. */
@@ -173,6 +179,32 @@ export const IssueLinkedPullRequest = Schema.Struct({
 });
 export type IssueLinkedPullRequest = typeof IssueLinkedPullRequest.Type;
 
+/** Another issue referenced as a parent/epic or subtask of this one. */
+export const IssueRelationRef = Schema.Struct({
+  key: TrimmedNonEmptyString,
+  title: TrimmedNonEmptyString,
+  url: TrimmedNonEmptyString,
+  state: Schema.optional(IssueState),
+});
+export type IssueRelationRef = typeof IssueRelationRef.Type;
+
+/** Another issue linked by a named relationship (e.g. "blocks", "is blocked by", "relates to"). */
+export const IssueLinkedIssue = Schema.Struct({
+  ...IssueRelationRef.fields,
+  relation: TrimmedNonEmptyString,
+});
+export type IssueLinkedIssue = typeof IssueLinkedIssue.Type;
+
+/** A file attached to an issue on the tracker. */
+export const IssueAttachment = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  filename: TrimmedNonEmptyString,
+  url: TrimmedNonEmptyString,
+  mimeType: Schema.NullOr(TrimmedNonEmptyString),
+  size: Schema.NullOr(NonNegativeInt),
+});
+export type IssueAttachment = typeof IssueAttachment.Type;
+
 /**
  * What a tracker can do at all, so a surface never offers an action that would fail. The
  * service refuses a call outside these before it reaches the driver.
@@ -233,6 +265,12 @@ export const IssueDetail = Schema.Struct({
   commentsCursor: Schema.NullOr(TrimmedNonEmptyString),
   events: Schema.Array(IssueEvent),
   linkedPullRequests: Schema.Array(IssueLinkedPullRequest),
+  issueType: Schema.optional(TrimmedNonEmptyString),
+  priority: Schema.optional(TrimmedNonEmptyString),
+  parent: Schema.optional(IssueRelationRef),
+  subtasks: Schema.optional(Schema.Array(IssueRelationRef)),
+  linkedIssues: Schema.optional(Schema.Array(IssueLinkedIssue)),
+  attachments: Schema.optional(Schema.Array(IssueAttachment)),
 });
 export type IssueDetail = typeof IssueDetail.Type;
 
@@ -284,6 +322,14 @@ export const IssueListInput = Schema.Struct({
   ),
   /** An assignee's `login`, as an issue of that tracker names them. */
   assignee: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(320))),
+  /** Jira account ID from the candidate picker. */
+  assigneeId: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(320))),
+  /** Jira issue type names. An issue may match any selected type. */
+  issueTypes: Schema.optional(
+    Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(200))).check(
+      Schema.isMaxLength(20),
+    ),
+  ),
   /** Absent means `updated`. */
   sort: Schema.optional(IssueListSort),
 });
@@ -338,6 +384,7 @@ export const IssueCreateInput = Schema.Struct({
   body: IssueBody,
   labels: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(50)),
   assignees: Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(25)),
+  issueType: Schema.optional(TrimmedNonEmptyString),
 });
 export type IssueCreateInput = typeof IssueCreateInput.Type;
 
@@ -429,13 +476,24 @@ export const IssueAssigneeCandidate = Schema.Struct({
   ...IssueActor.fields,
   /** How the tracker addresses this person on a write, which is not always the login. */
   id: TrimmedNonEmptyString,
+  tracker: Schema.optional(Schema.Literal("jira")),
 });
 export type IssueAssigneeCandidate = typeof IssueAssigneeCandidate.Type;
+
+export const IssueCandidatesInput = Schema.Struct({
+  ...IssueScopeRef.fields,
+  kind: Schema.optional(Schema.Literals(["labels", "assignees", "issue-types"])),
+  query: Schema.optional(TrimmedNonEmptyString.check(Schema.isMaxLength(200))),
+  offset: Schema.optional(NonNegativeInt),
+});
+export type IssueCandidatesInput = typeof IssueCandidatesInput.Type;
 
 /** The labels and people a scope offers, read when a picker opens rather than with every issue. */
 export const IssueCandidates = Schema.Struct({
   labels: Schema.Array(IssueLabelCandidate),
   assignees: Schema.Array(IssueAssigneeCandidate),
+  issueTypes: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  hasMore: Schema.optional(Schema.Boolean),
   /** The tracker has more than were read, so somebody missing is not necessarily ineligible. */
   truncated: Schema.Boolean,
 });
@@ -497,7 +555,7 @@ export class IssueOperationError extends Schema.TaggedError<IssueOperationError>
 export type IssueError = IssueUnavailableError | IssueOperationError;
 
 /** Who created a thread ↔ issue link. */
-export const ThreadIssueLinkSource = Schema.Literals(["manual", "agent"]);
+export const ThreadIssueLinkSource = Schema.Literals(["manual", "agent", "automatic"]);
 export type ThreadIssueLinkSource = typeof ThreadIssueLinkSource.Type;
 
 /**
@@ -568,6 +626,20 @@ export const StandaloneIssueTrackerDescriptor = Schema.Struct({
     label: TrimmedNonEmptyString,
     /** Where to mint one, or null when the tracker has no stable page for it. */
     helpUrl: Schema.NullOr(TrimmedNonEmptyString),
+    /**
+     * A credential of several parts, such as a site, an email and a token. Clients ask for each
+     * and send them as one JSON object keyed by `key` in place of a single token.
+     */
+    fields: Schema.optional(
+      Schema.Array(
+        Schema.Struct({
+          key: TrimmedNonEmptyString,
+          label: TrimmedNonEmptyString,
+          placeholder: Schema.optional(TrimmedNonEmptyString),
+          secret: Schema.Boolean,
+        }),
+      ),
+    ),
   }),
 });
 export type StandaloneIssueTrackerDescriptor = typeof StandaloneIssueTrackerDescriptor.Type;

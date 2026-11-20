@@ -5,19 +5,23 @@
 import * as Schema from "effect/Schema";
 import type * as Effect from "effect/Effect";
 import type {
+  IssueAttachment,
   IssueState,
   IssueCandidates,
+  IssueCandidatesInput,
   IssueCapabilities,
   IssueComment,
   IssueCommentsPage,
   IssueCreateResult,
   IssueEvent,
   IssueInvolvement,
+  IssueLinkedIssue,
   IssueListSort,
   IssueLinkedPullRequest,
   IssueListState,
   IssueReaction,
   IssueReactionContent,
+  IssueRelationRef,
   IssueSummary,
   IssueTemplateList,
   IssueTrackerKind,
@@ -92,6 +96,12 @@ export interface TrackerIssueDetail extends TrackerIssueSummary {
   readonly commentsCursor: string | null;
   readonly events: ReadonlyArray<IssueEvent>;
   readonly linkedPullRequests: ReadonlyArray<IssueLinkedPullRequest>;
+  readonly issueType?: string | undefined;
+  readonly priority?: string | undefined;
+  readonly parent?: IssueRelationRef | undefined;
+  readonly subtasks?: ReadonlyArray<IssueRelationRef> | undefined;
+  readonly linkedIssues?: ReadonlyArray<IssueLinkedIssue> | undefined;
+  readonly attachments?: ReadonlyArray<IssueAttachment> | undefined;
 }
 
 /**
@@ -100,7 +110,10 @@ export interface TrackerIssueDetail extends TrackerIssueSummary {
  */
 export type IssueInvolvementFilter =
   | { readonly involvement: "all" }
-  | { readonly involvement: Exclude<IssueInvolvement, "all">; readonly viewer: string };
+  | {
+      readonly involvement: Extract<IssueInvolvement, "assigned" | "authored" | "mentioned">;
+      readonly viewer: string;
+    };
 
 export interface IssueTrackerApi {
   readonly kind: IssueTrackerKind;
@@ -123,6 +136,9 @@ export interface IssueTrackerApi {
         readonly labels?: ReadonlyArray<string> | undefined;
         /** The `login` of an assignee, as this tracker's own issues name them. */
         readonly assignee?: string | undefined;
+        readonly assigneeId?: string | undefined;
+        readonly issueTypes?: ReadonlyArray<string> | undefined;
+        readonly jiraInvolvement?: "assigned-or-authored" | undefined;
         readonly sort: IssueListSort;
         /** A cursor this tracker handed back from an earlier page. Absent asks for the first. */
         readonly cursor?: string | undefined;
@@ -146,6 +162,7 @@ export interface IssueTrackerApi {
       readonly body: string;
       readonly labels: ReadonlyArray<string>;
       readonly assignees: ReadonlyArray<string>;
+      readonly issueType?: string | undefined;
     },
   ) => Effect.Effect<IssueCreateResult, IssueTrackerError>;
 
@@ -194,7 +211,7 @@ export interface IssueTrackerApi {
 
   /** Only called when `capabilities.labels` or `capabilities.assignees` is true. */
   readonly listCandidates?: (
-    input: IssueScopeTarget,
+    input: IssueScopeTarget & Pick<IssueCandidatesInput, "kind" | "query" | "offset">,
   ) => Effect.Effect<IssueCandidates, IssueTrackerError>;
 }
 

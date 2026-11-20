@@ -219,7 +219,9 @@ export function IssuesPage() {
     ...(search.host ? { host: search.host } : {}),
     ...(debouncedQuery ? { query: debouncedQuery } : {}),
     ...(search.label?.length ? { labels: search.label } : {}),
-    ...(search.assignee ? { assignee: search.assignee } : {}),
+    ...(search.issueType?.length ? { issueTypes: search.issueType } : {}),
+    ...(search.assigneeId ? { assigneeId: search.assigneeId } : {}),
+    ...(search.assignee && !search.assigneeId ? { assignee: search.assignee } : {}),
     ...(search.order ? { sort: search.order } : {}),
   };
   const everyProjectHidden =
@@ -339,7 +341,9 @@ export function IssuesPage() {
       ...(merged.host ? { host: merged.host } : {}),
       q: merged.q || undefined,
       ...(merged.label?.length ? { label: merged.label } : {}),
+      ...(merged.issueType?.length ? { issueType: merged.issueType } : {}),
       ...(merged.assignee ? { assignee: merged.assignee } : {}),
+      ...(merged.assigneeId ? { assigneeId: merged.assigneeId } : {}),
       ...(merged.order ? { order: merged.order } : {}),
       ...(merged.selectedEnvironmentId
         ? { selectedEnvironmentId: merged.selectedEnvironmentId }
@@ -736,8 +740,11 @@ export function IssuesPage() {
                   scopes={filterScopes}
                   labels={search.label ?? []}
                   onLabels={(label) => updateSearch({ label })}
+                  issueTypes={search.issueType ?? []}
+                  onIssueTypes={(issueType) => updateSearch({ issueType })}
                   assignee={search.assignee}
-                  onAssignee={(assignee) => updateSearch({ assignee })}
+                  assigneeId={search.assigneeId}
+                  onAssignee={(assignee, assigneeId) => updateSearch({ assignee, assigneeId })}
                   projects={filterProjects}
                   hiddenProjects={hiddenProjects}
                   onHiddenProjects={(hideProjects) => updateSearch({ hideProjects })}
@@ -754,6 +761,8 @@ export function IssuesPage() {
                       host: view.host,
                       q: view.q,
                       label: view.label,
+                      issueType: view.issueType,
+                      assigneeId: view.assigneeId,
                       assignee: view.assignee,
                       order: view.order,
                     })

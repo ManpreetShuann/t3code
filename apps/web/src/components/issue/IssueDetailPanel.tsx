@@ -1,5 +1,9 @@
 import { RegistryContext, useAtomValue } from "@effect/atom-react";
-import { issueEventSentence, issueWriteAccess } from "@t3tools/client-runtime/issue-presentation";
+import {
+  issueEventSentence,
+  issueLinksOpenInApp,
+  issueWriteAccess,
+} from "@t3tools/client-runtime/issue-presentation";
 import { createIssueCommentPager } from "@t3tools/client-runtime/state/issues";
 import {
   issueAssigneeHeld,
@@ -27,9 +31,11 @@ import type {
   ScopedThreadRef,
 } from "@t3tools/contracts";
 import {
+  ArrowUpRightIcon,
   CheckIcon,
   ChevronDownIcon,
   ExternalLinkIcon,
+  PaperclipIcon,
   TagIcon,
   UserPlusIcon,
   UsersIcon,
@@ -647,6 +653,10 @@ export function IssueDetailPanel({
           )}
 
           <PullRequestMetaLine className="mt-2 min-h-5 text-xs text-muted-foreground">
+            {detail.issueType ? (
+              <span className="font-medium text-foreground/80">{detail.issueType}</span>
+            ) : null}
+            {detail.priority ? <span>{detail.priority}</span> : null}
             <PullRequestActorLabel actor={detail.author} />
             <span>
               <T>
@@ -668,6 +678,24 @@ export function IssueDetailPanel({
           </PullRequestMetaLine>
 
           <div className="mt-4 space-y-2">
+            {detail.parent ? (
+              <PullRequestMetaRow
+                icon={<ArrowUpRightIcon className="size-3.5" />}
+                label={gt("Parent")}
+              >
+                <a
+                  href={detail.parent.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex min-w-0 items-center gap-1.5 text-foreground hover:underline"
+                >
+                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                    {detail.parent.key}
+                  </span>
+                  <span className="truncate">{detail.parent.title}</span>
+                </a>
+              </PullRequestMetaRow>
+            ) : null}
             <PullRequestMetaRow icon={<TagIcon className="size-3.5" />} label={gt("Labels")}>
               <span className="flex min-w-0 flex-wrap items-center gap-1">
                 {detail.labels.length === 0 ? (
@@ -772,6 +800,100 @@ export function IssueDetailPanel({
           </div>
         </PullRequestSection>
 
+        {detail.subtasks && detail.subtasks.length > 0 ? (
+          <PullRequestSection key={`subtasks:${detail.url}`} title={gt("Subtasks")}>
+            <div className="flex flex-col gap-1">
+              {detail.subtasks.map((sub) => {
+                const subState = sub.state ? issueStatePresentation(sub.state) : null;
+                return (
+                  <a
+                    key={sub.key}
+                    href={sub.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                  >
+                    {subState ? (
+                      <subState.Icon
+                        aria-hidden
+                        className={cn("size-3.5 shrink-0", subState.toneClassName)}
+                      />
+                    ) : null}
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      {sub.key}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{sub.title}</span>
+                    {sub.state ? (
+                      <span className="shrink-0 text-xs text-muted-foreground">
+                        {sub.state.name}
+                      </span>
+                    ) : null}
+                  </a>
+                );
+              })}
+            </div>
+          </PullRequestSection>
+        ) : null}
+
+        {detail.linkedIssues && detail.linkedIssues.length > 0 ? (
+          <PullRequestSection key={`linked-issues:${detail.url}`} title={gt("Linked issues")}>
+            <div className="flex flex-col gap-1">
+              {detail.linkedIssues.map((link) => {
+                const linkState = link.state ? issueStatePresentation(link.state) : null;
+                return (
+                  <a
+                    key={`${link.relation}:${link.key}`}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                  >
+                    {linkState ? (
+                      <linkState.Icon
+                        aria-hidden
+                        className={cn("size-3.5 shrink-0", linkState.toneClassName)}
+                      />
+                    ) : null}
+                    <span className="shrink-0 text-xs text-muted-foreground">{link.relation}</span>
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      {link.key}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm">{link.title}</span>
+                  </a>
+                );
+              })}
+            </div>
+          </PullRequestSection>
+        ) : null}
+
+        {detail.attachments && detail.attachments.length > 0 ? (
+          <PullRequestSection key={`attachments:${detail.url}`} title={gt("Attachments")}>
+            <div className="flex flex-col gap-1">
+              {detail.attachments.map((file) => (
+                <a
+                  key={file.id}
+                  href={file.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+                >
+                  <PaperclipIcon aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1 truncate text-sm">{file.filename}</span>
+                  {file.size !== null ? (
+                    <span className="shrink-0 tabular-nums text-xs text-muted-foreground">
+                      {file.size < 1024
+                        ? `${file.size} B`
+                        : file.size < 1024 * 1024
+                          ? `${(file.size / 1024).toFixed(1)} KB`
+                          : `${(file.size / (1024 * 1024)).toFixed(1)} MB`}
+                    </span>
+                  ) : null}
+                </a>
+              ))}
+            </div>
+          </PullRequestSection>
+        ) : null}
+
         {detail.linkedPullRequests.length > 0 ? (
           <PullRequestSection key={`linked:${detail.url}`} title={gt("Linked pull requests")}>
             <div className="flex flex-col gap-1">
@@ -781,7 +903,7 @@ export function IssueDetailPanel({
                   link={link}
                   scope={detail.scope}
                   onSelect={
-                    onSelectPullRequest
+                    onSelectPullRequest && issueLinksOpenInApp(detail.tracker)
                       ? () =>
                           onSelectPullRequest({
                             projectId: reference.projectId,

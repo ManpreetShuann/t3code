@@ -14,7 +14,21 @@ import {
   holdIssuePages,
   issueCursorsForHost,
   issueFilterScopes,
+  issueInvolvementSelected,
+  toggleIssueInvolvement,
 } from "./issueList.ts";
+
+it("toggles the existing involvement options independently and clears them with Everyone", () => {
+  const assigned = toggleIssueInvolvement("all", "assigned");
+  const both = toggleIssueInvolvement(assigned, "authored");
+  expect(assigned).toBe("assigned");
+  expect(issueInvolvementSelected(both, "assigned")).toBe(true);
+  expect(issueInvolvementSelected(both, "authored")).toBe(true);
+  expect(issueInvolvementSelected(both, "all")).toBe(false);
+  expect(toggleIssueInvolvement(both, "assigned")).toBe("authored");
+  expect(toggleIssueInvolvement(both, "authored")).toBe("assigned");
+  expect(toggleIssueInvolvement(both, "all")).toBe("all");
+});
 
 const environmentId = "env-1" as EnvironmentId;
 const api = "api" as ProjectId;

@@ -598,6 +598,53 @@ describe("IssueService with a standalone tracker", () => {
     }),
   );
 
+  it.effect("applies Jira-specific list filters only to Jira scopes", () =>
+    Effect.gen(function* () {
+      const jira = IssueTrackerKind.make("jira");
+      const gitScopes: string[] = [];
+      const jiraTracker = fakeStandaloneTracker({
+        listIssues: (input) =>
+          Effect.sync(() => {
+            expect(input).toMatchObject({
+              scope: "ENG",
+              jiraInvolvement: "assigned-or-authored",
+              issueTypes: ["Task"],
+              assigneeId: "jira-account",
+            });
+            return { items: [issue("ENG-1")], nextCursor: null };
+          }),
+      });
+      const jiraApi: StandaloneIssueTrackerApi = {
+        ...jiraTracker,
+        kind: jira,
+        standalone: { ...jiraTracker.standalone, tracker: jira, host: "atlassian.net" },
+      };
+      const service = yield* makeService({
+        projects: [project({ id: "web", repository: "acme/web" })],
+        trackers: [
+          jiraApi,
+          fakeTracker({
+            listIssues: (input) =>
+              Effect.sync(() => {
+                gitScopes.push(input.scope);
+                return { items: [], nextCursor: null };
+              }),
+          }),
+        ],
+        bindings: { web: { tracker: jira, scope: "ENG" } },
+      });
+      const result = yield* service.list({
+        state: "open",
+        involvement: "assigned-or-authored",
+        issueTypes: ["Task"],
+        assigneeId: "jira-account",
+      });
+      expect(result.entries).toMatchObject([{ tracker: jira, key: "ENG-1" }]);
+      expect(gitScopes).toEqual([]);
+      expect(result.trackers.map(({ tracker }) => tracker)).toEqual([jira, GITHUB]);
+    }),
+  );
+
   it.effect("lists a bound project's standalone scopes beside its git host and serves them", () =>
     Effect.gen(function* () {
       const listed: string[] = [];

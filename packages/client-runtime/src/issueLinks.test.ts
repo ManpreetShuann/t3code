@@ -6,7 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveIssueLinkTarget } from "./issueLinks.ts";
+import { mayContainStandaloneIssueLink, resolveIssueLinkTarget } from "./issueLinks.ts";
 
 const project = (id: string, repository: string, origin?: string) =>
   ({
@@ -126,6 +126,55 @@ describe("resolveIssueLinkTarget", () => {
     expect(resolve("https://linear.app/othercorp/issue/WEB-17")).toBeNull();
     expect(
       resolveIssueLinkTarget({ url: "https://linear.app/acme/issue/WEB-17", projects }),
+    ).toBeNull();
+  });
+
+  it("reads a Jira link only on the connected site", () => {
+    const trackers = {
+      trackers: [
+        {
+          tracker: IssueTrackerKind.make("jira"),
+          displayName: "Jira",
+          host: "atlassian.net",
+          scopeNoun: "project",
+          credential: { label: "API token", helpUrl: null },
+          connected: true,
+          account: "Julius",
+          detail: null,
+          workspace: "acme",
+          scopes: [],
+        },
+      ],
+      bindings: {
+        [ProjectId.make("p1")]: { tracker: IssueTrackerKind.make("jira"), scope: "ENG" },
+      },
+    };
+    const resolve = (url: string) => resolveIssueLinkTarget({ url, projects, trackers });
+    expect(resolve("https://acme.atlassian.net/browse/ENG-4")?.ref).toEqual({
+      projectId: "p1",
+      tracker: "jira",
+      host: "atlassian.net",
+      scope: "ENG",
+      key: "ENG-4",
+    });
+    expect(
+      resolve("https://acme.atlassian.net/jira/software/projects/ENG/boards/1?selectedIssue=ENG-4")
+        ?.ref,
+    ).toMatchObject({ projectId: "p1", scope: "ENG", key: "ENG-4" });
+    expect(resolve("https://acme.atlassian.net/issues/ENG-4")?.ref).toMatchObject({
+      projectId: "p1",
+      scope: "ENG",
+      key: "ENG-4",
+    });
+    const upper = "See https://ACME.ATLASSIAN.NET/browse/ENG-4";
+    expect(mayContainStandaloneIssueLink(upper)).toBe(true);
+    expect(resolve(upper.slice(4))?.ref.key).toBe("ENG-4");
+    // Project keys repeat across sites; only the connected one's links are its issues.
+    expect(resolve("https://othercorp.atlassian.net/browse/ENG-4")).toBeNull();
+    expect(
+      resolve(
+        "https://othercorp.atlassian.net/jira/software/projects/ENG/boards/1?selectedIssue=ENG-4",
+      ),
     ).toBeNull();
   });
 

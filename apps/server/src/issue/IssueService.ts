@@ -11,6 +11,7 @@ import {
   IssueUnavailableError,
   SourceControlProviderKind,
   type IssueCandidates,
+  type IssueCandidatesInput,
   type IssueCommentInput,
   type IssueCommentsPage,
   type IssueCommentsPageInput,
@@ -152,7 +153,9 @@ export class IssueService extends Context.Service<
       input: IssueCommentsPageInput,
     ) => Effect.Effect<IssueCommentsPage, IssueError>;
     readonly templates: (input: IssueScopeRef) => Effect.Effect<IssueTemplateList, IssueError>;
-    readonly candidates: (input: IssueScopeRef) => Effect.Effect<IssueCandidates, IssueError>;
+    readonly candidates: (
+      input: IssueCandidatesInput,
+    ) => Effect.Effect<IssueCandidates, IssueError>;
     readonly create: (input: IssueCreateInput) => Effect.Effect<IssueCreateResult, IssueError>;
     readonly comment: (input: IssueCommentInput) => Effect.Effect<void, IssueError>;
     readonly update: (input: IssueUpdateInput) => Effect.Effect<void, IssueError>;
@@ -343,9 +346,16 @@ const make = Effect.gen(function* () {
     const limit = input.limit ?? DEFAULT_LIST_LIMIT;
     // Worktrees of one repository are separate projects, and every repository of an Azure
     // DevOps project shares its work items; read each scope once.
+    const jiraInvolvement =
+      input.involvement === "assigned-or-authored" ? input.involvement : undefined;
+    const jiraOnly =
+      jiraInvolvement !== undefined ||
+      input.assigneeId !== undefined ||
+      (input.issueTypes?.length ?? 0) > 0;
     const scopes = new Map<string, SupportedProject>();
     for (const project of supported) {
       if (host !== undefined && project.host !== host) continue;
+      if (jiraOnly && project.tracker !== "jira") continue;
       const key = listCursorKey(project.host, project.scope);
       if (!scopes.has(key)) scopes.set(key, project);
     }
@@ -356,7 +366,12 @@ const make = Effect.gen(function* () {
     const errors: IssueListProjectError[] = [];
     const nextCursors: Record<string, string> = {};
 
-    const involvement = input.involvement ?? "all";
+    const involvement =
+      input.involvement === "assigned" ||
+      input.involvement === "authored" ||
+      input.involvement === "mentioned"
+        ? input.involvement
+        : "all";
     // Only a narrowed listing compares against the signed-in account; `all` never reads it.
     const viewerRequests = new Map<string, Effect.Effect<string, IssueTrackerError>>();
     for (const project of involvement === "all" ? [] : scopes.values()) {
@@ -426,6 +441,9 @@ const make = Effect.gen(function* () {
                 query: input.query,
                 labels: input.labels,
                 assignee: input.assignee,
+                assigneeId: input.assigneeId,
+                issueTypes: input.issueTypes,
+                jiraInvolvement,
                 sort: input.sort ?? "updated",
                 cursor,
                 refresh: input.refresh,
@@ -559,6 +577,7 @@ const make = Effect.gen(function* () {
           ? Effect.fail(unsupported("candidates", "labels or assignees"))
           : project.api
               .listCandidates({
+                ...input,
                 cwd: project.project.workspaceRoot,
                 host: project.host,
                 scope: project.scope,
@@ -581,6 +600,7 @@ const make = Effect.gen(function* () {
                 body: input.body,
                 labels: input.labels,
                 assignees: input.assignees,
+                ...(input.issueType === undefined ? {} : { issueType: input.issueType }),
               })
               .pipe(Effect.mapError(toIssueError("create"))),
       ),

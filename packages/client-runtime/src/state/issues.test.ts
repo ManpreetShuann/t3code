@@ -197,6 +197,48 @@ describe("createIssueCommentPager", () => {
 });
 
 describe("createMergedIssueCandidatesAtoms", () => {
+  it("keeps distinct Jira accounts and uses the latest page's continuation", () => {
+    const registry = AtomRegistry.make();
+    const scope = {
+      projectId: ProjectId.make("jira"),
+      tracker: IssueTrackerKind.make("jira"),
+      host: "atlassian.net",
+      scope: "ENG",
+    };
+    const environmentId = EnvironmentId.make("issues");
+    const merged = createMergedIssueCandidatesAtoms(
+      ({ input }) =>
+        Atom.make(
+          Effect.succeed({
+            labels: [],
+            assignees: [
+              {
+                id: `account-${input.offset ?? 0}`,
+                login: "Same Name",
+                name: "Same Name",
+                avatarUrl: null,
+                tracker: "jira" as const,
+              },
+            ],
+            hasMore: input.offset === undefined,
+            truncated: input.offset === undefined,
+          }),
+        ),
+      String,
+    );
+    const first = { environmentId, input: scope };
+    const last = { environmentId, input: { ...scope, offset: 100 } };
+    try {
+      expect(registry.get(merged.atom([first])).hasMore).toBe(true);
+      const result = registry.get(merged.atom([first, last]));
+      expect(result.assignees.map(({ id }) => id)).toEqual(["account-0", "account-100"]);
+      expect(result.hasMore).toBe(false);
+      expect(result.truncated).toBe(false);
+    } finally {
+      registry.dispose();
+    }
+  });
+
   it("retries only failed scopes that are not already reloading", () => {
     const registry = AtomRegistry.make();
     const target = (scope: string) => ({

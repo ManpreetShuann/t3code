@@ -2,27 +2,43 @@ import { Atom } from "effect/reactivity";
 
 export interface IssueListFilters {
   readonly labels: ReadonlyArray<string>;
+  readonly issueTypes: ReadonlyArray<string>;
   /** Kept with the name the picker showed, so the chip can say who without the candidates. */
-  readonly assignee: { readonly login: string; readonly name: string | null } | null;
+  readonly assignee: {
+    readonly login: string;
+    readonly name: string | null;
+    readonly accountId?: string;
+  } | null;
 }
 
-/** Shared by the list and the sheets that search a tracker for a label or person. */
 export const issueListFiltersAtom = Atom.make<IssueListFilters>({
   labels: [],
+  issueTypes: [],
   assignee: null,
 }).pipe(Atom.keepAlive, Atom.withLabel("mobile:issues:list-filters"));
 
-/** The picks the listed scopes no longer offer, which a picker still lists so they can be removed. */
+/** The picker keeps selected filters visible even when the tracker omits them. */
 export function unofferedIssueFilters(
   filters: IssueListFilters,
   offered: {
     readonly labels: ReadonlyArray<{ readonly name: string }>;
-    readonly assignees: ReadonlyArray<{ readonly login: string }>;
+    readonly issueTypes: ReadonlyArray<string>;
+    readonly assignees: ReadonlyArray<{
+      readonly login: string;
+      readonly id?: string;
+      readonly tracker?: "jira";
+    }>;
   },
 ): IssueListFilters {
-  const login = filters.assignee?.login;
   return {
     labels: filters.labels.filter((name) => !offered.labels.some((label) => label.name === name)),
-    assignee: offered.assignees.some((actor) => actor.login === login) ? null : filters.assignee,
+    issueTypes: filters.issueTypes.filter((name) => !offered.issueTypes.includes(name)),
+    assignee: offered.assignees.some((actor) =>
+      actor.tracker === "jira"
+        ? actor.id === filters.assignee?.accountId
+        : !filters.assignee?.accountId && actor.login === filters.assignee?.login,
+    )
+      ? null
+      : filters.assignee,
   };
 }

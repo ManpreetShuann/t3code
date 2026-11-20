@@ -14,12 +14,12 @@ import {
   IssueTrackerKind,
   type IssueCapabilities,
   type IssueEvent,
-  type IssueInvolvement,
   type IssueLinkedPullRequest,
   type IssueViewerPermissions,
 } from "@t3tools/contracts";
 import {
   IssueTrackerError,
+  type IssueInvolvementFilter,
   type IssueTrackerApi,
 } from "@t3tools/source-control-core/server/IssueTracker";
 
@@ -156,7 +156,7 @@ function quoted(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function involvementClause(involvement: IssueInvolvement): string {
+function involvementClause(involvement: IssueInvolvementFilter["involvement"]): string {
   switch (involvement) {
     case "assigned":
       return " AND [System.AssignedTo] = @Me";

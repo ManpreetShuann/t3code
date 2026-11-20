@@ -197,6 +197,48 @@ export const ReadIssueResult = Schema.Struct({
       closesIssue: Schema.Boolean,
     }),
   ),
+  issueType: Schema.optional(Schema.String),
+  priority: Schema.optional(Schema.String),
+  parent: Schema.optional(
+    Schema.Struct({
+      key: Schema.String,
+      title: Schema.String,
+      url: Schema.String,
+      state: Schema.optional(IssueState),
+    }),
+  ),
+  subtasks: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        key: Schema.String,
+        title: Schema.String,
+        url: Schema.String,
+        state: Schema.optional(IssueState),
+      }),
+    ),
+  ),
+  linkedIssues: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        relation: Schema.String,
+        key: Schema.String,
+        title: Schema.String,
+        url: Schema.String,
+        state: Schema.optional(IssueState),
+      }),
+    ),
+  ),
+  attachments: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        filename: Schema.String,
+        url: Schema.String,
+        mimeType: Schema.NullOr(Schema.String),
+        size: Schema.NullOr(Schema.Int),
+      }),
+    ),
+  ),
 });
 export type ReadIssueResult = typeof ReadIssueResult.Type;
 
@@ -288,6 +330,12 @@ const CreateIssueTool = Tool.make("create_issue", {
     body: Schema.optional(Schema.String.check(Schema.isMaxLength(65_536))),
     labels: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(50))),
     assignees: Schema.optional(Schema.Array(TrimmedNonEmptyString).check(Schema.isMaxLength(25))),
+    issueType: Schema.optional(
+      TrimmedNonEmptyString.annotate({
+        description:
+          "Tracker issue type when supported (e.g. Bug, Story, Task on Jira). Defaults to the project's default type.",
+      }),
+    ),
   }),
   success: CreateIssueResult,
   failure: IssueToolError,

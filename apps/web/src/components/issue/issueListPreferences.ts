@@ -24,6 +24,8 @@ export interface IssueListPreferences {
   /** `label`, `assignee` and `order` for the same reason: the pull-request page has `labels` and `sort`. */
   readonly label?: ReadonlyArray<string> | undefined;
   readonly assignee?: string | undefined;
+  readonly assigneeId?: string | undefined;
+  readonly issueType?: ReadonlyArray<string> | undefined;
   readonly order?: "created" | undefined;
 }
 
@@ -47,6 +49,8 @@ export const IssueListPreferencesSchema = Schema.Struct({
   q: Schema.optional(BoundedPreference),
   label: Schema.optional(Schema.Array(BoundedPreference).check(Schema.isMaxLength(20))),
   assignee: Schema.optional(BoundedPreference),
+  assigneeId: Schema.optional(BoundedPreference),
+  issueType: Schema.optional(Schema.Array(BoundedPreference).check(Schema.isMaxLength(20))),
   order: Schema.optional(Schema.Literal("created")),
 });
 const decodePreferences = Schema.decodeUnknownOption(IssueListPreferencesSchema);
@@ -66,6 +70,8 @@ export function issueListPreferences(search: {
   readonly q?: string | undefined;
   readonly label?: ReadonlyArray<string> | undefined;
   readonly assignee?: string | undefined;
+  readonly assigneeId?: string | undefined;
+  readonly issueType?: ReadonlyArray<string> | undefined;
   readonly order?: "created" | undefined;
 }): IssueListPreferences {
   return {
@@ -77,6 +83,8 @@ export function issueListPreferences(search: {
     ...(search.host ? { host: search.host } : {}),
     ...(search.q ? { q: search.q } : {}),
     ...(search.label?.length ? { label: search.label } : {}),
+    ...(search.issueType?.length ? { issueType: search.issueType } : {}),
+    ...(search.assigneeId ? { assigneeId: search.assigneeId } : {}),
     ...(search.assignee ? { assignee: search.assignee } : {}),
     ...(search.order ? { order: search.order } : {}),
   };

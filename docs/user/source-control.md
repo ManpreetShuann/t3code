@@ -439,6 +439,15 @@ Settings → Source control & issues, then pick one or more teams for that proje
 another team at any time to add it; uncheck every team to unbind the project. Each team's
 issues appear in the Linear group of the issue list, sorted with the rest by last update, and
 each can be loaded further on its own. Agents file new issues in the first team picked.
+To list Jira Cloud issues beside a project's, connect Jira under Settings → Source control & issues,
+then choose the project for that project there. Jira takes your site (`example.atlassian.net`), your
+account email and an
+[API token](https://id.atlassian.com/manage-profile/security/api-tokens) created with **Create API
+token**, not a token with scopes. Jira issues move between statuses through your workflow's
+transitions. For Jira, "mentioning you" lists the issues you watch. A Jira description with
+attachments, mentions or other Jira-only content is edited in Jira. Jira's linked pull requests come
+from the tools connected to its Development panel. Linear's and Jira's linked pull requests open in
+the browser. Jira reactions are not shown, because Jira Cloud has no API for them.
 
 Select an issue to open it beside the list: description, comments, state changes, linked pull
 requests, labels, assignees, and reactions. Linked pull requests open in the same panel. You can

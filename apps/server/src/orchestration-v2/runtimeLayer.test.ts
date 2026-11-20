@@ -4193,6 +4193,7 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
     Effect.gen(function* () {
       const orchestrator = yield* Orchestrator.OrchestratorV2;
       const worker = yield* EffectWorker.OrchestrationEffectWorkerV2;
+      const maintenance = yield* ProjectionReplay.ProjectionReplay;
       const threadId = ThreadId.make("runtime-issue-links");
       const projectId = ProjectId.make("issue-link-project");
       yield* orchestrator.dispatch({
@@ -4210,10 +4211,10 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         worktreePath: null,
       });
       const key = {
-        tracker: IssueTrackerKind.make("github"),
-        host: "GitHub.com",
-        scope: "Pingdotgg/T3code",
-        key: "42",
+        tracker: IssueTrackerKind.make("jira"),
+        host: "Atlassian.net",
+        scope: "DEVX",
+        key: "DEVX-42",
       };
       yield* orchestrator.dispatch({
         type: "thread.issue.link",
@@ -4221,8 +4222,8 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         threadId,
         ...key,
         projectId,
-        url: "https://github.com/pingdotgg/t3code/issues/42",
-        displayKey: "#42",
+        url: "https://team.atlassian.net/browse/DEVX-42",
+        displayKey: "DEVX-42",
         title: "Issue links",
         source: "manual",
       });
@@ -4232,11 +4233,11 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         commandId: CommandId.make("issue-link-2"),
         threadId,
         ...key,
-        host: "github.com",
-        scope: "pingdotgg/t3code",
+        host: "atlassian.net",
+        scope: "devx",
         projectId,
-        url: "https://github.com/pingdotgg/t3code/issues/42",
-        displayKey: "#42",
+        url: "https://team.atlassian.net/browse/DEVX-42",
+        displayKey: "DEVX-42",
         title: "Issue links, renamed",
         source: "agent",
       });
@@ -4252,9 +4253,9 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
         })),
         [
           {
-            host: "github.com",
-            scope: "Pingdotgg/T3code",
-            key: "42",
+            host: "atlassian.net",
+            scope: "DEVX",
+            key: "DEVX-42",
             source: "manual",
             title: "Issue links",
           },
@@ -4269,6 +4270,28 @@ it.layer(layerTest)("OrchestrationV2LayerLive lifecycle", (it) => {
       yield* worker.drain();
       assert.deepEqual((yield* orchestrator.getThreadShell(threadId))?.issues, []);
       assert.deepEqual((yield* orchestrator.getThreadProjection(threadId)).thread.issues, []);
+      assert.isTrue((yield* maintenance.rebuild).valid);
+      const relink = {
+        type: "thread.issue.link",
+        threadId,
+        ...key,
+        projectId,
+        url: "https://team.atlassian.net/browse/DEVX-42",
+        displayKey: "DEVX-42",
+        title: "Issue links",
+      } as const;
+      yield* orchestrator.dispatch({
+        ...relink,
+        commandId: CommandId.make("issue-link-automatic-after-unlink"),
+        source: "automatic",
+      });
+      assert.deepEqual((yield* orchestrator.getThreadShell(threadId))?.issues, []);
+      yield* orchestrator.dispatch({
+        ...relink,
+        commandId: CommandId.make("issue-link-explicit-after-unlink"),
+        source: "manual",
+      });
+      assert.equal((yield* orchestrator.getThreadShell(threadId))?.issues?.[0]?.key, "DEVX-42");
     }),
   );
 

@@ -17,7 +17,7 @@ const bounded = (value: unknown): string | undefined => {
   return typeof text === "string" && text.trim() ? text.trim().slice(0, 200) : undefined;
 };
 
-const labels = (raw: unknown): ReadonlyArray<string> | undefined => {
+const filterNames = (raw: unknown): ReadonlyArray<string> | undefined => {
   const names = (Array.isArray(raw) ? raw : [raw]).flatMap((name) => bounded(name) ?? []);
   return names.length === 0 ? undefined : names.slice(0, 20);
 };
@@ -37,13 +37,20 @@ const projectPairs = (raw: unknown): IssuesSearch["hideProjects"] => {
 // route's unvalidated search, where a key left out would keep its raw value.
 export const issuesSearchFromUrl = (raw: Record<string, unknown>): IssuesSearch => ({
   who:
-    raw.who === "assigned" || raw.who === "authored" || raw.who === "mentioned" ? raw.who : "all",
+    raw.who === "assigned" ||
+    raw.who === "authored" ||
+    raw.who === "mentioned" ||
+    raw.who === "assigned-or-authored"
+      ? raw.who
+      : "all",
   status: raw.status === "closed" || raw.status === "all" ? raw.status : "open",
   hideProjects: projectPairs(raw.hideProjects),
   host: bounded(raw.host),
   q: bounded(raw.q),
-  label: labels(raw.label),
+  label: filterNames(raw.label),
+  issueType: filterNames(raw.issueType),
   assignee: bounded(raw.assignee),
+  assigneeId: bounded(raw.assigneeId),
   order: raw.order === "created" ? "created" : undefined,
   selectedEnvironmentId: bounded(raw.selectedEnvironmentId) as EnvironmentId | undefined,
   selectedProjectId: bounded(raw.selectedProjectId) as ProjectId | undefined,

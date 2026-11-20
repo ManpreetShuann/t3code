@@ -5238,14 +5238,34 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         case "thread.issue.link":
         case "thread.issue.unlink": {
           const links = thread.issues ?? [];
-          const existing = links.find((link) => threadIssueKeysEqual(link, command));
+          const autoLink = command.type === "thread.issue.link" && command.source === "automatic";
+          const jiraKey = command.tracker === "jira" ? command.key.trim() : null;
+          const existing = links.find(
+            (link) =>
+              threadIssueKeysEqual(link, command) ||
+              (autoLink && jiraKey !== null && link.tracker === "jira" && link.key === jiraKey),
+          );
+          const dismissed = thread.dismissedJiraIssueKeys ?? [];
+          const wasDismissed = jiraKey !== null && dismissed.includes(jiraKey);
           if (command.type === "thread.issue.unlink") {
             if (!existing) return thread;
-            return { ...thread, issues: links.filter((link) => link !== existing), updatedAt: now };
+            return {
+              ...thread,
+              issues: links.filter((link) => link !== existing),
+              ...(jiraKey !== null && !wasDismissed
+                ? { dismissedJiraIssueKeys: [...dismissed, jiraKey] }
+                : {}),
+              updatedAt: now,
+            };
           }
-          if (existing) return thread;
+          if (existing || (autoLink && wasDismissed)) {
+            return thread;
+          }
           return {
             ...thread,
+            ...(wasDismissed
+              ? { dismissedJiraIssueKeys: dismissed.filter((key) => key !== jiraKey) }
+              : {}),
             issues: [
               ...links,
               {

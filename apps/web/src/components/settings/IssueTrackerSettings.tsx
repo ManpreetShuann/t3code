@@ -5,11 +5,12 @@ import {
   issueTrackerScopeOptions,
   issueTrackerSummary,
   hasIssueTrackerTeams,
+  issueTrackerFieldsToken,
 } from "@t3tools/client-runtime/state/issue-trackers";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import { T, useGT, useMessages } from "gt-react";
 import { ChevronDownIcon, ExternalLinkIcon, XIcon } from "lucide-react";
-import { useState, type ElementType } from "react";
+import { useState, type ElementType, type ReactNode } from "react";
 import type {
   EnvironmentId,
   IssueTrackerConnection,
@@ -21,13 +22,14 @@ import { useEnvironmentQuery } from "../../state/query";
 import { issueTrackerEnvironment } from "../../state/issueTrackers";
 import { useProjects } from "../../state/entities";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { LinearIcon } from "../Icons";
+import { JiraIcon, LinearIcon } from "../Icons";
 import { cn } from "~/lib/utils";
 
 import { Badge } from "../ui/badge";
 import { CheckboxMark } from "../ui/checkbox";
 import { Button, InlineButton } from "../ui/button";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
+import { Input } from "../ui/input";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Skeleton } from "../ui/skeleton";
 import { SecretInput } from "./SecretInput";
@@ -38,6 +40,7 @@ type TrackerIcon = ElementType<{ className?: string }>;
 
 /** Web art per tracker kind; the server supplies everything else about a tracker. */
 const TRACKER_ICONS: Partial<Record<string, TrackerIcon>> = {
+  jira: JiraIcon,
   linear: LinearIcon,
 };
 
@@ -129,14 +132,46 @@ function TrackerRow({
       input: { tracker: tracker.tracker, token },
     });
     setBusy(false);
-    if (result._tag === "Success") return;
+    if (result._tag === "Success") return true;
     const error = squashAtomCommandFailure(result);
     setFailure(error instanceof Error ? error.message : gt("The request failed."));
+    return false;
   };
 
   const inputId = `issue-tracker-${tracker.tracker}-${environmentId}`;
   const usable = tracker.connected && tracker.account !== null;
   const summary = issueTrackerSummary(tracker, bindings, messages);
+
+  const description = (
+    <>
+      <T>Stored on the server.</T>
+      {tracker.credential.helpUrl ? (
+        <>
+          {" "}
+          <InlineButton
+            render={
+              <a href={tracker.credential.helpUrl} target="_blank" rel="noreferrer noopener" />
+            }
+          >
+            <T>Create one</T>
+            <ExternalLinkIcon aria-hidden className="size-3" />
+          </InlineButton>
+        </>
+      ) : null}
+      {failure ? <span className="block text-destructive">{failure}</span> : null}
+    </>
+  );
+  const disconnect = tracker.connected ? (
+    <Button
+      type="button"
+      size="icon-sm"
+      variant="ghost-destructive"
+      onClick={() => void submit(null)}
+      aria-label={gt("Disconnect {tracker}", { tracker: tracker.displayName })}
+    >
+      <XIcon className="size-3.5" />
+    </Button>
+  ) : null;
 
   return (
     <div className="first:rounded-t-xl last:rounded-b-xl transition-colors hover:bg-muted/20">
@@ -182,57 +217,36 @@ function TrackerRow({
           {/* Locked while saving, so an edit made mid-request is not overwritten by the saved value. */}
           <fieldset disabled={!canEdit || busy} className="contents">
             <div className="px-3 pb-4 pt-1 sm:px-4">
-              <SettingsRow
-                title={<label htmlFor={inputId}>{tracker.credential.label}</label>}
-                description={
-                  <>
-                    <T>Stored on the server.</T>
-                    {tracker.credential.helpUrl ? (
-                      <>
-                        {" "}
-                        <InlineButton
-                          render={
-                            <a
-                              href={tracker.credential.helpUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                            />
-                          }
-                        >
-                          <T>Create one</T>
-                          <ExternalLinkIcon aria-hidden className="size-3" />
-                        </InlineButton>
-                      </>
-                    ) : null}
-                    {failure ? <span className="block text-destructive">{failure}</span> : null}
-                  </>
-                }
-                control={
-                  <div className="flex w-full min-w-0 items-center gap-2 @min-[32rem]/settings-row:w-56">
-                    <SecretInput
-                      id={inputId}
-                      size="sm"
-                      className="min-w-0 flex-1"
-                      configured={tracker.connected}
-                      value=""
-                      onCommit={(next) => {
-                        if (next.trim()) void submit(next.trim());
-                      }}
-                    />
-                    {tracker.connected ? (
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost-destructive"
-                        onClick={() => void submit(null)}
-                        aria-label={gt("Disconnect {tracker}", { tracker: tracker.displayName })}
-                      >
-                        <XIcon className="size-3.5" />
-                      </Button>
-                    ) : null}
-                  </div>
-                }
-              />
+              {tracker.credential.fields ? (
+                <CredentialFields
+                  idPrefix={inputId}
+                  fields={tracker.credential.fields}
+                  connected={tracker.connected}
+                  description={description}
+                  disconnect={disconnect}
+                  onSubmit={submit}
+                />
+              ) : (
+                <SettingsRow
+                  title={<label htmlFor={inputId}>{tracker.credential.label}</label>}
+                  description={description}
+                  control={
+                    <div className="flex w-full min-w-0 items-center gap-2 @min-[32rem]/settings-row:w-56">
+                      <SecretInput
+                        id={inputId}
+                        size="sm"
+                        className="min-w-0 flex-1"
+                        configured={tracker.connected}
+                        value=""
+                        onCommit={(next) => {
+                          if (next.trim()) void submit(next.trim());
+                        }}
+                      />
+                      {disconnect}
+                    </div>
+                  }
+                />
+              )}
               {usable ? (
                 <ProjectBindings
                   environmentId={environmentId}
@@ -248,6 +262,76 @@ function TrackerRow({
       </Collapsible>
     </div>
   );
+}
+
+/**
+ * One row per part of the credential, laid out like a single-token tracker's row. The parts are
+ * sent together on Enter or when a field is left, once all are filled.
+ */
+function CredentialFields({
+  idPrefix,
+  fields,
+  connected,
+  description,
+  disconnect,
+  onSubmit,
+}: {
+  readonly idPrefix: string;
+  readonly fields: NonNullable<IssueTrackerConnection["credential"]["fields"]>;
+  readonly connected: boolean;
+  readonly description: ReactNode;
+  readonly disconnect: ReactNode;
+  readonly onSubmit: (token: string) => Promise<boolean>;
+}) {
+  const gt = useGT();
+  const [drafts, setDrafts] = useState<Readonly<Record<string, string>>>({});
+  // The last credential sent, so moving between fields does not resend one that just failed.
+  // Enter always sends, so a failed attempt can be retried as it is.
+  const [sent, setSent] = useState<string | null>(null);
+  const token = issueTrackerFieldsToken(fields, drafts);
+  const send = (retry: boolean) => {
+    if (token === null || (!retry && token === sent)) return;
+    setSent(token);
+    void onSubmit(token).then((connected) => {
+      if (!connected) return;
+      setDrafts({});
+      setSent(null);
+    });
+  };
+  return fields.map((field) => {
+    const id = `${idPrefix}-${field.key}`;
+    return (
+      <SettingsRow
+        key={field.key}
+        title={<label htmlFor={id}>{field.label}</label>}
+        description={field.secret ? description : undefined}
+        control={
+          <div className="flex w-full min-w-0 items-center gap-2 @min-[32rem]/settings-row:w-56">
+            <Input
+              id={id}
+              size="sm"
+              className="min-w-0 flex-1"
+              type={field.secret ? "password" : "text"}
+              autoComplete="off"
+              spellCheck={false}
+              placeholder={
+                connected && field.secret
+                  ? gt("Stored secret, enter a new value to replace")
+                  : field.placeholder
+              }
+              value={drafts[field.key] ?? ""}
+              onChange={(event) => setDrafts({ ...drafts, [field.key]: event.target.value })}
+              onBlur={() => send(false)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.nativeEvent.isComposing) send(true);
+              }}
+            />
+            {field.secret ? disconnect : null}
+          </div>
+        }
+      />
+    );
+  });
 }
 
 /** One picker per project of this environment: which of the tracker's scopes it reads, if any. */

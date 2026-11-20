@@ -1,5 +1,6 @@
 import type {
   EnvironmentId,
+  IssueInvolvement,
   IssueListCursors,
   IssueListEntry,
   IssueListProjectError,
@@ -13,6 +14,28 @@ import type {
 import { mergeIssueListPage } from "./state/issues.ts";
 import { sourceControlClients } from "./sourceControlClients.ts";
 import type { EnvironmentProject } from "./state/shell.ts";
+
+export function issueInvolvementSelected(
+  current: IssueInvolvement,
+  option: IssueInvolvement,
+): boolean {
+  return (
+    current === option ||
+    (current === "assigned-or-authored" && (option === "assigned" || option === "authored"))
+  );
+}
+
+export function toggleIssueInvolvement(
+  current: IssueInvolvement,
+  option: IssueInvolvement,
+): IssueInvolvement {
+  if (option !== "assigned" && option !== "authored") return option;
+  const other = option === "assigned" ? "authored" : "assigned";
+  if (issueInvolvementSelected(current, option)) {
+    return issueInvolvementSelected(current, other) ? other : "all";
+  }
+  return issueInvolvementSelected(current, other) ? "assigned-or-authored" : option;
+}
 
 export interface EnvironmentIssueEntry extends IssueListEntry {
   readonly environmentId: EnvironmentId;
@@ -182,7 +205,10 @@ export function issueFilterScopes(
         if (!tracker?.configured || tracker.capabilities === null) continue;
         if (
           scopes.some(
-            (s) => s.input.scope.toLowerCase() === scope.toLowerCase() && s.input.host === host,
+            (s) =>
+              s.environmentId === environmentId &&
+              s.input.scope.toLowerCase() === scope.toLowerCase() &&
+              s.input.host === host,
           )
         )
           continue;
@@ -212,6 +238,7 @@ export function issueFilterScopes(
       if (
         scopes.some(
           (s) =>
+            s.environmentId === environmentId &&
             s.input.scope.toLowerCase() === input.scope.toLowerCase() &&
             s.input.host?.toLowerCase() === host,
         )
