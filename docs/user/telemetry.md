@@ -1,28 +1,20 @@
 # Product usage data
 
-This fork does not send product usage events, agent feedback, relay connection traces, or mobile
-crash reports. Explicitly configured OpenTelemetry exports remain available.
+T3 Code in this fork sends no product usage events, relay connection traces, or mobile crash
+reports, and has no setting that turns them on. It does not create an install ID or read your
+provider accounts to identify you.
 
 ## Agent feedback
 
-Agent feedback is off by default. If enabled, reports remain on your machine and are not sent.
-`t3 feedback list` shows recent reports.
-
-## Relay connection diagnostics
-
-Relay connection traces are disabled in this fork's server, desktop, web, and mobile builds.
-Official hosted clients or apps are separate builds and may have different settings.
-
-## Mobile app diagnostics
-
-Mobile crash reporting and relay tracing are disabled in this fork's mobile builds.
+Agent feedback reports, when turned on in **Settings > Labs**, are kept on your machine and never
+sent. `t3 feedback list` shows them.
 
 ## Agent activity for mobile notifications
 
 When **Publish agent activity** is enabled on a host, it sends project and thread titles, model
 names, activity status, and environment and thread identifiers to the T3 Connect relay for
-[mobile notifications and live activities](./mobile-notifications.md). This is separate from
-product events and relay diagnostics.
+[mobile notifications and live activities](./mobile-notifications.md). This is a feature of
+T3 Connect, not analytics; it only runs on a host signed in to T3 Connect.
 
 To stop publishing, turn off **Publish agent activity** under **Settings > Sharing & access** on
 the host. Turning off notifications on a phone controls that phone's alerts, not the host's
