@@ -189,6 +189,29 @@ const sendFor = (
   });
 
 it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService test", (it) => {
+  it.effect("never sends product analytics even when explicitly enabled", () =>
+    Effect.gen(function* () {
+      let requests = 0;
+      const client = HttpClient.make((request) => {
+        requests += 1;
+        return respondWithStatus(204)(request);
+      });
+      yield* Effect.gen(function* () {
+        const analytics = yield* AnalyticsService.AnalyticsService;
+        assert.isFalse(yield* analytics.record("client.turn.requested"));
+        yield* analytics.recordOwners([{ source: "device", ownerId: "a".repeat(64) }], "client");
+        yield* analytics.flush;
+      }).pipe(
+        Effect.provide(AnalyticsService.layer),
+        Effect.provideService(HttpClient.HttpClient, client),
+        Effect.provide(
+          ConfigProvider.layer(ConfigProvider.fromUnknown({ T3CODE_TELEMETRY_ENABLED: true })),
+        ),
+      );
+      assert.equal(requests, 0);
+    }),
+  );
+
   it.effect("waits for desktop shell consent and honors a late telemetry opt-out", () =>
     Effect.gen(function* () {
       const env: NodeJS.ProcessEnv = { T3CODE_DESKTOP_SHELL_DISCOVERY_PENDING: "1" };
@@ -368,7 +391,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
         prefix: "t3-telemetry-base-",
       });
 
-      const layerTelemetry = AnalyticsService.layer.pipe(Layer.provideMerge(layerServerConfig));
+      const layerTelemetry = liveAnalyticsLayer.pipe(Layer.provideMerge(layerServerConfig));
       const layerConfig = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
           T3CODE_TELEMETRY_ENABLED: true,
@@ -475,7 +498,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, NodeCrypto.layer))("AnalyticsService
       const layerServerConfig = ServerConfig.ServerConfig.layerTest(process.cwd(), {
         prefix: "t3-telemetry-disabled-",
       });
-      const layerTelemetry = AnalyticsService.layer.pipe(Layer.provideMerge(layerServerConfig));
+      const layerTelemetry = liveAnalyticsLayer.pipe(Layer.provideMerge(layerServerConfig));
       const layerConfig = ConfigProvider.layer(
         ConfigProvider.fromUnknown({
           T3CODE_TELEMETRY_ENABLED: false,

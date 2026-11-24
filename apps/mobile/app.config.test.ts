@@ -4,9 +4,15 @@ import { afterEach, expect, it, vi } from "vite-plus/test";
 import appleAppSiteAssociation from "../web/public/.well-known/apple-app-site-association.json";
 import assetLinks from "../web/public/.well-known/assetlinks.json";
 
+const observe = vi.hoisted(() => ({ configure: vi.fn() }));
+vi.mock("expo-observe", () => ({ Observe: observe }));
+
 // Keep config parsing independent of local env files and build credentials.
 vi.mock("../../scripts/lib/public-config.ts", () => ({
-  loadRepoEnv: () => ({ APP_VARIANT: process.env.APP_VARIANT }),
+  loadRepoEnv: () => ({
+    APP_VARIANT: process.env.APP_VARIANT,
+    T3CODE_RELAY_URL: process.env.T3CODE_RELAY_URL,
+  }),
 }));
 
 afterEach(() => {
@@ -18,6 +24,25 @@ async function loadConfig(variant: string | undefined) {
   vi.stubEnv("APP_VARIANT", variant);
   return (await import("./app.config.ts")).default;
 }
+
+it("does not send native crash reports even when a relay is configured", async () => {
+  vi.stubEnv("T3CODE_RELAY_URL", "https://relay.example.test");
+  const config = await loadConfig("production");
+  expect(config.extra?.eas?.observe?.endpointUrl).toBe("https://observe.invalid");
+});
+
+it("keeps crash report dispatch disabled even when enabled", async () => {
+  vi.resetModules();
+  observe.configure.mockClear();
+  const { crashReportingAvailable, setCrashReportsEnabled } =
+    await import("./src/features/observability/observe.ts");
+  expect(crashReportingAvailable).toBe(false);
+  await setCrashReportsEnabled(true);
+  expect(observe.configure.mock.calls).toEqual([
+    [{ dispatchingEnabled: false }],
+    [{ dispatchingEnabled: false }],
+  ]);
+});
 
 it.each(["prod", ""])("rejects APP_VARIANT=%j before selecting production IDs", async (value) => {
   await expect(loadConfig(value)).rejects.toThrow(

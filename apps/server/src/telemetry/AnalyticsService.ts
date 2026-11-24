@@ -416,4 +416,8 @@ export const make = Effect.gen(function* () {
   return AnalyticsService.of({ record, flush, recordOwners });
 });
 
-export const layer = Layer.effect(AnalyticsService, make);
+export const layer = Layer.succeed(AnalyticsService, {
+  record: () => Effect.succeed(false),
+  flush: Effect.void,
+  recordOwners: () => Effect.void,
+});

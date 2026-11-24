@@ -17,6 +17,24 @@ import {
   withRelayClientTracing,
 } from "./relayTracing.ts";
 
+it.effect("does not export relay traces when an endpoint is configured", () =>
+  Effect.gen(function* () {
+    const tracer = yield* RelayClientTracer;
+    expect(Option.isNone(tracer)).toBe(true);
+  }).pipe(
+    Effect.provide(
+      layer(
+        { tracesUrl: "https://example.test/traces", tracesDataset: "test", tracesToken: "test" },
+        { serviceName: "test", runtime: "test", serviceInstanceId: "test", client: "test" },
+      ),
+    ),
+    Effect.provideService(
+      HttpClient.HttpClient,
+      HttpClient.make(() => Effect.never),
+    ),
+  ),
+);
+
 function collectingTracer(spans: Array<string>): Tracer.Tracer {
   return Tracer.make({
     span: (options) => {

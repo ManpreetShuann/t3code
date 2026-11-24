@@ -1,38 +1,47 @@
-# Product usage data and diagnostics
+# Product usage data
 
-T3 Code sends lightweight product usage events and relay connection traces to keep the app reliable and fast. Prompts, responses, file contents, and credentials are never included (unless you explicitly approve an [agent feedback](#agent-feedback) card with conversation text attached).
-
-## Product usage events
-
-The server sends usage events to `ingest.t3.codes` under a hashed random install ID (plus a hashed T3 Connect account ID when signed in, and random client device IDs). Events contain provider, catalog model name (non-catalog models report as custom), reasoning effort, permission mode, turn/request outcome, duration, release channel, and token counts.
-
-## Disable telemetry
-
-- **Server / CLI**: Set `T3CODE_TELEMETRY_ENABLED=false` or `DO_NOT_TRACK=1` before starting (`DO_NOT_TRACK=1` takes precedence). CI environments (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `JENKINS_URL`) disable telemetry by default unless `T3CODE_TELEMETRY_ENABLED=true`.
-- **Desktop app**: Export `T3CODE_TELEMETRY_ENABLED=false` or `DO_NOT_TRACK=1` in your shell profile (macOS/Linux) or user environment variables (Windows) and restart.
-- **Managed policy**: Administrators can set `"telemetry": false` in [managed policy](./managed-policy.md#other-capabilities) for servers and desktop apps.
-- **Mobile app**: Toggle **Send crash reports** and **Send connection traces** separately in **Settings → About T3 Code → Diagnostics**.
-
-## Relay connection diagnostics
-
-T3 Connect sends connection timings, request paths, environment/thread IDs, and error types (no addresses, logs, or stack frames) to Axiom. Disabled by the server telemetry opt-outs above or by `T3CODE_OTEL_SDK_DISABLED` / `OTEL_SDK_DISABLED`.
+This fork does not send product usage events, agent feedback, relay connection traces, or mobile
+crash reports. Explicitly configured OpenTelemetry exports remain available.
 
 ## Agent feedback
 
-Optional tool for agents to report T3 Code bugs or missing capabilities. Configure in **Settings → Labs → Agent feedback**:
+Agent feedback is off by default. If enabled, reports remain on your machine and are not sent.
+`t3 feedback list` shows recent reports.
 
-- **Off** (default): Feedback tools and `t3 feedback` are disabled.
-- **When I ask**: Agents submit a report only when you ask, shown as an interactive approval card before anything leaves your machine.
-- **Automatic**: Also sends minimal automated reports (problem kind + tool/command name only—no text or conversation) when an agent hits a T3 tool failure; enables `t3 feedback` CLI reporting (up to 10/hour).
+## Relay connection diagnostics
 
-Approval cards show exact payloads (expected/actual/workaround, turn outline with no text, and optional **Include the conversation** up to 16 KB). File paths, usernames, hostnames, git remotes, and secret-like strings are scrubbed before saving, and reports use one-off random IDs. Inspect local reports with `t3 feedback list [--json]`.
+Relay connection traces are disabled in this fork's server, desktop, web, and mobile builds.
+Official hosted clients or apps are separate builds and may have different settings.
+
+## Mobile app diagnostics
+
+Mobile crash reporting and relay tracing are disabled in this fork's mobile builds.
 
 ## Agent activity for mobile notifications
 
-**Settings → Sharing & access → Publish agent activity** sends project/thread titles, model names, and turn status to the T3 Connect relay for [mobile notifications and live activities](./mobile-notifications.md). This is independent of telemetry—turn it off directly on the host if you don't want it.
+When **Publish agent activity** is enabled on a host, it sends project and thread titles, model
+names, activity status, and environment and thread identifiers to the T3 Connect relay for
+[mobile notifications and live activities](./mobile-notifications.md). This is separate from
+product events and relay diagnostics.
 
-## Export diagnostics to your own OpenTelemetry receiver
+To stop publishing, turn off **Publish agent activity** under **Settings > Sharing & access** on
+the host. Turning off notifications on a phone controls that phone's alerts, not the host's
+publishing setting.
 
-Open **Settings → Maintenance → Diagnostics** (per environment) and enter OTLP HTTP endpoints (e.g. `http://localhost:4318/v1/traces`), save, and restart the server. Use **Test** to verify connectivity.
+## Export diagnostics to your own receiver
 
-`T3CODE_OTLP_*_URL` and standard `OTEL_EXPORTER_OTLP_*` env vars override saved settings (use `T3CODE_OTLP_HEADERS` / `T3CODE_OTLP_PROTOCOL=http/protobuf` or the standard `OTEL_EXPORTER_OTLP_*` equivalents for auth and protobuf).
+To send traces, metrics, or logs to an OpenTelemetry receiver, open
+**Settings > Maintenance > Diagnostics**, select an environment, and enter each signal's OTLP HTTP
+endpoint under **OpenTelemetry export** (for example `http://localhost:4318/v1/traces`). Save, then
+restart that environment's server. The receiver must be reachable from the server's machine.
+**Test** sends an empty export from the server to check an endpoint before or after you save it;
+saved endpoints are checked when the section opens. Checks send authentication headers only to
+the signal's currently running endpoint and do not follow redirects. To check a new endpoint
+that requires authentication, save it and restart the server first.
+
+`T3CODE_OTLP_*_URL` and standard `OTEL_EXPORTER_OTLP_*` environment variables override the saved
+settings. An overridden signal shows **Set by environment** and names the variable that set it, and its
+**Test** checks the running endpoint instead of the field. For endpoints saved here or set with `T3CODE_OTLP_*_URL`, set `T3CODE_OTLP_HEADERS` for
+receivers that need authentication and `T3CODE_OTLP_PROTOCOL=http/protobuf` for receivers that do
+not accept JSON. An endpoint set with `OTEL_EXPORTER_OTLP_*` takes its headers and protocol from
+`OTEL_EXPORTER_OTLP_HEADERS` and `OTEL_EXPORTER_OTLP_PROTOCOL` instead.
