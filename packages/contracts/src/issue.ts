@@ -138,6 +138,8 @@ export const IssueSummary = Schema.Struct({
   assignees: Schema.Array(IssueActor),
   labels: Schema.Array(IssueLabel),
   commentCount: NonNegativeInt,
+  /** The tracker's own type name, such as Jira's "Epic" or "Bug". */
+  issueType: Schema.optional(TrimmedNonEmptyString),
 });
 export type IssueSummary = typeof IssueSummary.Type;
 
@@ -306,7 +308,6 @@ export const IssueDetail = Schema.Struct({
   commentsCursor: Schema.NullOr(TrimmedNonEmptyString),
   events: Schema.Array(IssueEvent),
   linkedPullRequests: Schema.Array(IssueLinkedPullRequest),
-  issueType: Schema.optional(TrimmedNonEmptyString),
   priority: Schema.optional(TrimmedNonEmptyString),
   parent: Schema.optional(IssueRelationRef),
   subtasks: Schema.optional(Schema.Array(IssueRelationRef)),

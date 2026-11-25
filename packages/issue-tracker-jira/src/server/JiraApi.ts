@@ -142,12 +142,12 @@ const ISSUE_FIELDS = [
   "created",
   "updated",
   "resolutiondate",
+  "issuetype",
 ];
 
 /** Only an issue's own page shows these. */
 const DETAIL_FIELDS = [
   "description",
-  "issuetype",
   "priority",
   "parent",
   "subtasks",

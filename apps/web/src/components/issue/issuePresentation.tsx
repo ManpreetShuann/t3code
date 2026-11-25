@@ -1,6 +1,16 @@
 import type { IssueState, IssueTrackerKind } from "@t3tools/contracts";
 import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
-import { CircleCheckIcon, CircleDotIcon, CircleSlashIcon, TicketIcon } from "lucide-react";
+import {
+  BookmarkIcon,
+  BugIcon,
+  CircleCheckIcon,
+  CircleDotIcon,
+  CircleSlashIcon,
+  CornerDownRightIcon,
+  SquareCheckIcon,
+  TicketIcon,
+  ZapIcon,
+} from "lucide-react";
 
 import { cn } from "~/lib/utils";
 import { JiraIcon, LinearIcon, type Icon } from "~/components/Icons";
@@ -24,6 +34,43 @@ export function issueTrackerPresentation(tracker: IssueTrackerKind | string) {
     return getSourceControlPresentationForKind(tracker);
   }
   return STANDALONE_TRACKERS[tracker] ?? { providerName: tracker, Icon: TicketIcon };
+}
+
+/** Jira's stock issue types by name; a custom type has no mark and shows none. */
+function issueTypePresentation(issueType: string | undefined) {
+  switch (issueType?.trim().toLowerCase()) {
+    case "epic":
+      return { label: issueType, Icon: ZapIcon, toneClassName: "text-violet-500" };
+    case "story":
+      return { label: issueType, Icon: BookmarkIcon, toneClassName: "text-green-500" };
+    case "task":
+      return { label: issueType, Icon: SquareCheckIcon, toneClassName: "text-blue-500" };
+    case "bug":
+      return { label: issueType, Icon: BugIcon, toneClassName: "text-red-500" };
+    case "subtask":
+    case "sub-task":
+      return { label: issueType, Icon: CornerDownRightIcon, toneClassName: "text-sky-500" };
+    default:
+      return null;
+  }
+}
+
+export function IssueTypeGlyph({
+  issueType,
+  className,
+}: {
+  issueType: string | undefined;
+  className?: string;
+}) {
+  const presentation = issueTypePresentation(issueType);
+  if (presentation === null) return null;
+  return (
+    <presentation.Icon
+      role="img"
+      aria-label={presentation.label}
+      className={cn("size-3.5 shrink-0", presentation.toneClassName, className)}
+    />
+  );
 }
 
 /**

@@ -88,7 +88,11 @@ import { IssueThreadLinks } from "./IssueThreadLinks";
 import { WorkflowRunsAbout } from "../workflows/WorkflowRunsAbout";
 import { ReactionBar } from "../pullRequest/PullRequestReactions";
 import { PullRequestsUnavailableState } from "../pullRequest/PullRequestsUnavailableState";
-import { issueTrackerPresentation, issueStatePresentation } from "./issuePresentation";
+import {
+  IssueTypeGlyph,
+  issueTrackerPresentation,
+  issueStatePresentation,
+} from "./issuePresentation";
 
 function IssueReactionBar({
   reactions,
@@ -781,7 +785,10 @@ export function IssueDetailPanel({
 
           <PullRequestMetaLine className="mt-2 min-h-5 text-xs text-muted-foreground">
             {detail.issueType ? (
-              <span className="font-medium text-foreground/80">{detail.issueType}</span>
+              <span className="inline-flex items-center gap-1 font-medium text-foreground/80">
+                <IssueTypeGlyph issueType={detail.issueType} />
+                {detail.issueType}
+              </span>
             ) : null}
             {detail.priority ? <span>{detail.priority}</span> : null}
             <PullRequestActorLabel actor={detail.author} />

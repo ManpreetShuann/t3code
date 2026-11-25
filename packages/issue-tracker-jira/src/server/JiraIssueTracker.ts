@@ -113,6 +113,7 @@ function toSummary(
   commentCount = 0,
 ): TrackerIssueSummary {
   const { fields } = issue;
+  const issueType = fields.issuetype?.name.trim() || undefined;
   return {
     key: issue.key,
     displayKey: issue.key,
@@ -127,6 +128,7 @@ function toSummary(
     assignees: fields.assignee == null ? [] : [toActor(fields.assignee)],
     labels: (fields.labels ?? []).map((name) => ({ name, color: null })),
     commentCount,
+    ...(issueType === undefined ? {} : { issueType }),
   };
 }
 
@@ -531,7 +533,6 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
         // An undocumented API: when it moves or refuses, the issue still opens.
         const pulls = yield* jira.pullRequests(issue.id).pipe(Effect.orElseSucceed(() => []));
         const { fields } = issue;
-        const issueType = fields.issuetype?.name.trim() || undefined;
         const priority = fields.priority?.name.trim() || undefined;
         const subtasks = (fields.subtasks ?? []).map((sub) => toRelationRef(origin, sub));
         const linkedIssues = toLinkedIssues(origin, fields.issuelinks ?? []);
@@ -559,7 +560,6 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
           commentsCursor: page.total > page.comments.length ? String(page.comments.length) : null,
           events: toEvents(issue.changelog?.histories ?? []),
           linkedPullRequests: toLinkedPullRequests(pulls),
-          ...(issueType === undefined ? {} : { issueType }),
           ...(priority === undefined ? {} : { priority }),
           ...(fields.parent == null ? {} : { parent: toRelationRef(origin, fields.parent) }),
           ...(subtasks.length === 0 ? {} : { subtasks }),
