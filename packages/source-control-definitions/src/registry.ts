@@ -16,7 +16,7 @@ export { canonicalizePullRequestUrl as canonicalizeGitCafePullRequestUrl } from 
  * claim URLs first: GitHub and Forgejo accept the same routes on any hostname. TanStack Source is a
  * private beta: every reader knows its URLs, and only a server with its flag on offers the forge.
  */
-export function makeBuiltInSourceControlDefinitions(options: { readonly tanStackSource: boolean }) {
+function makeBuiltInSourceControlDefinitions(options: { readonly tanStackSource: boolean }) {
   const tanStackSource = options.tanStackSource ? [TanStackSource.definition] : [];
   return makeSourceControlDefinitionRegistry(
     [
