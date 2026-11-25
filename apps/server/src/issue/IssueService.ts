@@ -458,7 +458,8 @@ const make = Effect.gen(function* () {
     const jiraOnly =
       jiraInvolvement !== undefined ||
       input.assigneeId !== undefined ||
-      (input.issueTypes?.length ?? 0) > 0;
+      (input.issueTypes?.length ?? 0) > 0 ||
+      (input.states?.length ?? 0) > 0;
     const scopes = new Map<string, SupportedProject>();
     for (const project of supported) {
       if (host !== undefined && project.host !== host) continue;
@@ -552,6 +553,7 @@ const make = Effect.gen(function* () {
                 sort,
                 assigneeId: input.assigneeId,
                 issueTypes: input.issueTypes,
+                states: input.states,
                 jiraInvolvement,
                 cursor,
                 refresh: input.refresh,
@@ -1036,11 +1038,11 @@ const make = Effect.gen(function* () {
       }
       return yield* (
         failure ??
-          new IssueOperationError({
-            operation: "resolveUrl",
-            reason: "not-found",
-            detail: "This issue URL does not belong to the connected workspace.",
-          })
+        new IssueOperationError({
+          operation: "resolveUrl",
+          reason: "not-found",
+          detail: "This issue URL does not belong to the connected workspace.",
+        })
       );
     },
   );

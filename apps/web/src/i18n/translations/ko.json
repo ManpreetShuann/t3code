@@ -13058,5 +13058,10 @@
   "bb9866823586b67a": "사용량 데이터베이스 및 Go 키",
   "8380d6f1828fe191": "대화 기록",
   "1f2036cf25caaf16": "Cursor에서 가져온 계정 사용량",
-  "51aa7700c1f967d2": "세션 기록"
+  "51aa7700c1f967d2": "세션 기록",
+  "4f549357d97d5910": "Any",
+  "47af22965b46eba6": "Search statuses",
+  "204167c06dc9fb6e": "Status",
+  "895218ec22f425cc": "No statuses found",
+  "2310b6e0e3e609bb": "The statuses could not be read"
 }

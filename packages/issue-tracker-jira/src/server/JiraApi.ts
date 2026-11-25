@@ -309,6 +309,10 @@ export class JiraApi extends Context.Service<
     readonly projectIssueTypes: (
       project: string,
     ) => Effect.Effect<ReadonlyArray<JiraIssueType>, IssueTrackerError>;
+    /** Every status the project's workflows use, once per issue type that uses it. */
+    readonly projectStatuses: (
+      project: string,
+    ) => Effect.Effect<ReadonlyArray<JiraStatus>, IssueTrackerError>;
     /**
      * The pull requests Jira's development panel shows for an issue, from every connected tool.
      * Jira serves these from an undocumented API, so callers treat a failure as none.
@@ -572,6 +576,12 @@ export const make = Effect.gen(function* () {
       path: `/rest/api/3/project/${encodeURIComponent(project)}`,
     }).pipe(Effect.map((answer) => answer.issueTypes.map(toIssueType)));
 
+  const projectStatuses: JiraApi["Service"]["projectStatuses"] = (project) =>
+    send("projectStatuses", Schema.Array(Schema.Struct({ statuses: Schema.Array(Status) })), {
+      method: "GET",
+      path: `/rest/api/3/project/${encodeURIComponent(project)}/statuses`,
+    }).pipe(Effect.map((types) => types.flatMap((type) => type.statuses)));
+
   const pullRequests: JiraApi["Service"]["pullRequests"] = Effect.fn("JiraApi.pullRequests")(
     function* (issueId) {
       const { summary } = yield* send("pullRequests", DevelopmentSummary, {
@@ -722,6 +732,7 @@ export const make = Effect.gen(function* () {
     permissions,
     issueTypes,
     projectIssueTypes,
+    projectStatuses,
     pullRequests,
     createIssue,
     updateIssue,

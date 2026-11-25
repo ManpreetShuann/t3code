@@ -141,6 +141,8 @@ export interface IssueTrackerApi {
         readonly assignee?: string | undefined;
         readonly assigneeId?: string | undefined;
         readonly issueTypes?: ReadonlyArray<string> | undefined;
+        /** Workflow state names an issue may be in, as this tracker names them. */
+        readonly states?: ReadonlyArray<string> | undefined;
         readonly jiraInvolvement?: "assigned-or-authored" | undefined;
         readonly sort: IssueListSort;
         /** A cursor this tracker handed back from an earlier page. Absent asks for the first. */

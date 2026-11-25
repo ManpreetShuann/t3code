@@ -220,6 +220,7 @@ export function IssuesPage() {
     ...(debouncedQuery ? { query: debouncedQuery } : {}),
     ...(search.label?.length ? { labels: search.label } : {}),
     ...(search.issueType?.length ? { issueTypes: search.issueType } : {}),
+    ...(search.states?.length ? { states: search.states } : {}),
     ...(search.assigneeId ? { assigneeId: search.assigneeId } : {}),
     ...(search.assignee && !search.assigneeId ? { assignee: search.assignee } : {}),
     ...(search.order ? { sort: search.order } : {}),
@@ -342,6 +343,7 @@ export function IssuesPage() {
       q: merged.q || undefined,
       ...(merged.label?.length ? { label: merged.label } : {}),
       ...(merged.issueType?.length ? { issueType: merged.issueType } : {}),
+      ...(merged.states?.length ? { states: merged.states } : {}),
       ...(merged.assignee ? { assignee: merged.assignee } : {}),
       ...(merged.assigneeId ? { assigneeId: merged.assigneeId } : {}),
       ...(merged.order ? { order: merged.order } : {}),
@@ -750,6 +752,8 @@ export function IssuesPage() {
                   onLabels={(label) => updateSearch({ label })}
                   issueTypes={search.issueType ?? []}
                   onIssueTypes={(issueType) => updateSearch({ issueType })}
+                  states={search.states ?? []}
+                  onStates={(states) => updateSearch({ states })}
                   assignee={search.assignee}
                   assigneeId={search.assigneeId}
                   onAssignee={(assignee, assigneeId) => updateSearch({ assignee, assigneeId })}
@@ -770,6 +774,7 @@ export function IssuesPage() {
                       q: view.q,
                       label: view.label,
                       issueType: view.issueType,
+                      states: view.states,
                       assigneeId: view.assigneeId,
                       assignee: view.assignee,
                       order: view.order,

@@ -26,6 +26,7 @@ export interface IssueListPreferences {
   readonly assignee?: string | undefined;
   readonly assigneeId?: string | undefined;
   readonly issueType?: ReadonlyArray<string> | undefined;
+  readonly states?: ReadonlyArray<string> | undefined;
   readonly order?: "created" | undefined;
 }
 
@@ -51,6 +52,7 @@ export const IssueListPreferencesSchema = Schema.Struct({
   assignee: Schema.optional(BoundedPreference),
   assigneeId: Schema.optional(BoundedPreference),
   issueType: Schema.optional(Schema.Array(BoundedPreference).check(Schema.isMaxLength(20))),
+  states: Schema.optional(Schema.Array(BoundedPreference).check(Schema.isMaxLength(20))),
   order: Schema.optional(Schema.Literal("created")),
 });
 const decodePreferences = Schema.decodeUnknownOption(IssueListPreferencesSchema);
@@ -72,6 +74,7 @@ export function issueListPreferences(search: {
   readonly assignee?: string | undefined;
   readonly assigneeId?: string | undefined;
   readonly issueType?: ReadonlyArray<string> | undefined;
+  readonly states?: ReadonlyArray<string> | undefined;
   readonly order?: "created" | undefined;
 }): IssueListPreferences {
   return {
@@ -84,6 +87,7 @@ export function issueListPreferences(search: {
     ...(search.q ? { q: search.q } : {}),
     ...(search.label?.length ? { label: search.label } : {}),
     ...(search.issueType?.length ? { issueType: search.issueType } : {}),
+    ...(search.states?.length ? { states: search.states } : {}),
     ...(search.assigneeId ? { assigneeId: search.assigneeId } : {}),
     ...(search.assignee ? { assignee: search.assignee } : {}),
     ...(search.order ? { order: search.order } : {}),

@@ -112,7 +112,7 @@ export type IssueScopeRef = typeof IssueScopeRef.Type;
 export const IssueCandidatesInput = Schema.Struct({
   ...IssueScopeRef.fields,
   /** Which list a picker needs. Absent reads labels and assignees. */
-  kind: Schema.optional(Schema.Literals(["labels", "assignees", "issue-types"])),
+  kind: Schema.optional(Schema.Literals(["labels", "assignees", "issue-types", "states"])),
   /** A name or email to search people for, where the candidates offer `assigneeSearch`. */
   query: Schema.optional(Schema.String.check(Schema.isMaxLength(320))),
   /** How many of the list were already read, to page past them where `hasMore` was true. */
@@ -378,6 +378,12 @@ export const IssueListInput = Schema.Struct({
       Schema.isMaxLength(20),
     ),
   ),
+  /** Workflow state names, as the tracker names them. An issue may be in any selected state. */
+  states: Schema.optional(
+    Schema.Array(TrimmedNonEmptyString.check(Schema.isMaxLength(200))).check(
+      Schema.isMaxLength(20),
+    ),
+  ),
   /** Absent means `updated`. */
   sort: Schema.optional(IssueListSort),
 });
@@ -537,6 +543,7 @@ export const IssueCandidates = Schema.Struct({
   /** `assignees` is incomplete, and the tracker searches the rest by `IssueCandidatesInput.query`. */
   assigneeSearch: Schema.optional(Schema.Boolean),
   issueTypes: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  states: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
   hasMore: Schema.optional(Schema.Boolean),
   /** The tracker has more than were read, so somebody missing is not necessarily ineligible. */
   truncated: Schema.Boolean,

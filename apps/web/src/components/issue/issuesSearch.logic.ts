@@ -51,6 +51,7 @@ export const issuesSearchFromUrl = (raw: Record<string, unknown>): IssuesSearch 
   q: bounded(raw.q),
   label: filterNames(raw.label),
   issueType: filterNames(raw.issueType),
+  states: filterNames(raw.states),
   assignee: bounded(raw.assignee),
   assigneeId: bounded(raw.assigneeId),
   order: raw.order === "created" ? "created" : undefined,

@@ -13137,5 +13137,10 @@
   "bb9866823586b67a": "用量数据库和 Go 密钥",
   "8380d6f1828fe191": "对话历史",
   "1f2036cf25caaf16": "来自 Cursor 的账户用量",
-  "51aa7700c1f967d2": "会话历史"
+  "51aa7700c1f967d2": "会话历史",
+  "4f549357d97d5910": "Any",
+  "47af22965b46eba6": "Search statuses",
+  "204167c06dc9fb6e": "Status",
+  "895218ec22f425cc": "No statuses found",
+  "2310b6e0e3e609bb": "The statuses could not be read"
 }

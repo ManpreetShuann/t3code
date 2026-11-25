@@ -10,6 +10,7 @@ import type {
   ProjectId,
 } from "@t3tools/contracts";
 import {
+  CircleDotIcon,
   FolderGit2Icon,
   LayersIcon,
   ListChecksIcon,
@@ -68,6 +69,8 @@ export function IssueFiltersMenu(props: {
   onLabels: (labels: ReadonlyArray<string>) => void;
   issueTypes: ReadonlyArray<string>;
   onIssueTypes: (types: ReadonlyArray<string>) => void;
+  states: ReadonlyArray<string>;
+  onStates: (states: ReadonlyArray<string>) => void;
   assignee: string | undefined;
   assigneeId: string | undefined;
   onAssignee: (assignee: string | undefined, assigneeId: string | undefined) => void;
@@ -83,6 +86,7 @@ export function IssueFiltersMenu(props: {
     props.hiddenProjects.size > 0,
     props.assignee ?? props.assigneeId,
     ...props.issueTypes,
+    ...props.states,
     ...props.labels,
   ].filter(Boolean).length;
   // Read when the menu opens, not with every listing: one request per scope.
@@ -211,6 +215,22 @@ export function IssueFiltersMenu(props: {
             </MenuSubPopup>
           </MenuSub>
         ) : null}
+        {props.scopes.some(({ input }) => input.tracker === "jira") || props.states.length > 0 ? (
+          <MenuSub>
+            <MenuSubTrigger>
+              <CircleDotIcon aria-hidden className="size-3.5" />
+              <span className="flex-1">
+                <T>Status</T>
+              </span>
+              <span className="min-w-0 max-w-32 truncate text-xs text-muted-foreground">
+                {props.states.join(", ") || gt("Any", { $context: "no status filter" })}
+              </span>
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              <StateChoices scopes={jiraScopes} value={props.states} onChange={props.onStates} />
+            </MenuSubPopup>
+          </MenuSub>
+        ) : null}
         <MenuSub>
           <MenuSubTrigger>
             <UserIcon aria-hidden className="size-3.5" />
@@ -303,7 +323,7 @@ function ProjectChoices(props: {
 
 function usePickerCandidates(
   scopes: ReadonlyArray<IssueCandidatesTarget>,
-  kind: "labels" | "assignees" | "issue-types",
+  kind: "labels" | "assignees" | "issue-types" | "states",
   query: string,
   offset = 0,
 ) {
@@ -331,6 +351,7 @@ function usePickerCandidates(
         labels: [],
         assignees: [],
         issueTypes: [],
+        states: [],
         hasMore: false,
         isPending: true,
         truncated: false,
@@ -445,6 +466,50 @@ function LabelChoices(props: {
           <T>More labels exist than are listed here.</T>
         </MenuItem>
       ) : null}
+    </>
+  );
+}
+
+function StateChoices(props: {
+  scopes: ReadonlyArray<IssueCandidatesTarget>;
+  value: ReadonlyArray<string>;
+  onChange: (value: ReadonlyArray<string>) => void;
+}) {
+  const gt = useGT();
+  const [query, setQuery] = useState("");
+  const known = usePickerCandidates(props.scopes, "states", "");
+  const needle = query.trim().toLowerCase();
+  const visible = [
+    ...new Set([...props.value, ...known.states.filter((name) => matches(needle, name))]),
+  ];
+  return (
+    <>
+      <MenuSearchInput
+        autoFocus
+        busy={known.isPending}
+        value={query}
+        onChange={(event) => setQuery(event.currentTarget.value)}
+        placeholder={gt("Search statuses")}
+        aria-label={gt("Search statuses")}
+      />
+      {visible.length === 0 && !known.isPending ? (
+        <MenuItem disabled>
+          {known.error === null ? <T>No statuses found</T> : <T>The statuses could not be read</T>}
+        </MenuItem>
+      ) : null}
+      {visible.map((name) => (
+        <MenuCheckboxItem
+          key={name}
+          checked={props.value.includes(name)}
+          onCheckedChange={(checked) =>
+            props.onChange(
+              checked ? [...props.value, name] : props.value.filter((value) => value !== name),
+            )
+          }
+        >
+          <span className="min-w-0 flex-1 truncate">{name}</span>
+        </MenuCheckboxItem>
+      ))}
     </>
   );
 }

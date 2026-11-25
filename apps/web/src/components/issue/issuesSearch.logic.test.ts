@@ -23,12 +23,14 @@ describe("issuesSearchFromUrl", () => {
       issuesSearchFromUrl({
         who: "assigned-or-authored",
         issueType: [" Bug ", "Task"],
+        states: ["In Review", " Done "],
         assignee: "Avery",
         assigneeId: "jira-account-id",
       }),
     ).toMatchObject({
       who: "assigned-or-authored",
       issueType: ["Bug", "Task"],
+      states: ["In Review", "Done"],
       assignee: "Avery",
       assigneeId: "jira-account-id",
     });

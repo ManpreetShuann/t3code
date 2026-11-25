@@ -13123,5 +13123,10 @@
   "bb9866823586b67a": "Nutzungsdatenbank und Go-Schlüssel",
   "8380d6f1828fe191": "Gesprächsverlauf",
   "1f2036cf25caaf16": "Kontonutzung von Cursor",
-  "51aa7700c1f967d2": "Sitzungsverlauf"
+  "51aa7700c1f967d2": "Sitzungsverlauf",
+  "4f549357d97d5910": "Any",
+  "47af22965b46eba6": "Search statuses",
+  "204167c06dc9fb6e": "Status",
+  "895218ec22f425cc": "No statuses found",
+  "2310b6e0e3e609bb": "The statuses could not be read"
 }

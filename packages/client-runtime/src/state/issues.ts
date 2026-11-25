@@ -456,6 +456,7 @@ export interface MergedIssueCandidates {
   readonly labels: ReadonlyArray<IssueLabelCandidate>;
   readonly assignees: ReadonlyArray<IssueAssigneeCandidate>;
   readonly issueTypes: ReadonlyArray<string>;
+  readonly states: ReadonlyArray<string>;
   readonly hasMore: boolean;
   readonly error: string | null;
   readonly isPending: boolean;
@@ -466,6 +467,7 @@ const NO_ISSUE_CANDIDATES: MergedIssueCandidates = {
   labels: [],
   assignees: [],
   issueTypes: [],
+  states: [],
   hasMore: false,
   error: null,
   isPending: false,
@@ -488,6 +490,7 @@ export function createMergedIssueCandidatesAtoms<E>(
       const labels = new Map<string, IssueLabelCandidate>();
       const assignees = new Map<string, IssueAssigneeCandidate>();
       const issueTypes = new Set<string>();
+      const states = new Set<string>();
       const pages = new Map<string, { offset: number; hasMore: boolean; truncated: boolean }>();
       let error: string | null = null;
       let isPending = false;
@@ -507,6 +510,7 @@ export function createMergedIssueCandidatesAtoms<E>(
           });
         }
         for (const type of value.issueTypes ?? []) issueTypes.add(type);
+        for (const state of value.states ?? []) states.add(state);
         for (const label of value.labels)
           if (!labels.has(label.name)) labels.set(label.name, label);
         for (const actor of value.assignees) {
@@ -518,6 +522,7 @@ export function createMergedIssueCandidatesAtoms<E>(
         labels: [...labels.values()].sort((a, b) => a.name.localeCompare(b.name)),
         assignees: [...assignees.values()].sort((a, b) => a.login.localeCompare(b.login)),
         issueTypes: [...issueTypes].sort((a, b) => a.localeCompare(b)),
+        states: [...states].sort((a, b) => a.localeCompare(b)),
         hasMore: [...pages.values()].some((page) => page.hasMore),
         error,
         isPending,

@@ -14,7 +14,7 @@ import {
   PullRequestLabelChip,
   PullRequestActorAvatar,
 } from "../pullRequest/pullRequestPresentation";
-import { IssueStateGlyph, issueTrackerPresentation } from "./issuePresentation";
+import { IssueStateChip, IssueStateGlyph, issueTrackerPresentation } from "./issuePresentation";
 
 export type IssueRowTarget = Pick<
   EnvironmentIssueEntry,
@@ -58,6 +58,7 @@ function IssueRowImpl({
         <PullRequestRowLines
           number={<span className={PULL_REQUEST_ROW_NUMBER_CLASS}>{entry.displayKey}</span>}
           title={entry.title}
+          signals={<IssueStateChip state={entry.state} />}
           status={
             <>
               {entry.assignees.length > 0 ? (

@@ -19,6 +19,7 @@ export function issueViewMatches(
       ...normalized,
       label: normalized.label?.toSorted(),
       issueType: normalized.issueType?.toSorted(),
+      states: normalized.states?.toSorted(),
       hideProjects: normalized.hideProjects?.map((pair) => JSON.stringify(pair)).toSorted(),
     });
   };

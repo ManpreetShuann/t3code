@@ -482,6 +482,9 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
             ...(input.issueTypes?.length
               ? [`issuetype in (${input.issueTypes.map(quoted).join(", ")})`]
               : []),
+            ...(input.states?.length
+              ? [`status in (${input.states.map(quoted).join(", ")})`]
+              : []),
             ...(rawJql === null || rawJql.predicate === "" ? [] : [`(${rawJql.predicate})`]),
             ...(text === undefined
               ? []
@@ -710,6 +713,15 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
                 labels: [],
                 assignees: [],
                 issueTypes: [...new Set(types.map((type) => type.name))],
+                truncated: false,
+              })),
+            );
+          case "states":
+            return jira.projectStatuses(project).pipe(
+              Effect.map((statuses) => ({
+                labels: [],
+                assignees: [],
+                states: [...new Set(statuses.map((status) => status.name))],
                 truncated: false,
               })),
             );

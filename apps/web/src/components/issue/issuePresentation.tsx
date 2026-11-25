@@ -54,6 +54,21 @@ export function issueStatePresentation(state: IssueState) {
   };
 }
 
+/** The tracker's own name for the state, in the tone its category wears on the pull-request page. */
+export function IssueStateChip({ state }: { state: IssueState }) {
+  const presentation = issueStatePresentation(state);
+  return (
+    <span
+      className={cn(
+        "min-w-0 truncate rounded-full border border-current/25 px-1.5 leading-4 font-medium",
+        presentation.toneClassName,
+      )}
+    >
+      {state.name}
+    </span>
+  );
+}
+
 export function IssueStateGlyph({ state, className }: { state: IssueState; className?: string }) {
   const presentation = issueStatePresentation(state);
   return (

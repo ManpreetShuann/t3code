@@ -13061,5 +13061,10 @@
   "bb9866823586b67a": "使用状況データベースと Go キー",
   "8380d6f1828fe191": "会話履歴",
   "1f2036cf25caaf16": "Cursor から取得するアカウントの使用状況",
-  "51aa7700c1f967d2": "セッション履歴"
+  "51aa7700c1f967d2": "セッション履歴",
+  "4f549357d97d5910": "Any",
+  "47af22965b46eba6": "Search statuses",
+  "204167c06dc9fb6e": "Status",
+  "895218ec22f425cc": "No statuses found",
+  "2310b6e0e3e609bb": "The statuses could not be read"
 }
