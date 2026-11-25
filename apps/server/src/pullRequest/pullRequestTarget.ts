@@ -137,12 +137,12 @@ export const resolveTarget = Effect.fn("PullRequestsToolkit.resolveTarget")(func
     sourceControlDefinitions.repositorySelector(identity)?.toLowerCase() === repository;
   const url =
     definition?.changeRequestUrl({
-          host,
-          repository,
-          number: input.number,
-          remoteUrl: identity?.locator.remoteUrl,
-          webUrl: ownRepository ? identity?.webUrl : undefined,
-      }) ?? null;
+      host,
+      repository,
+      number: input.number,
+      remoteUrl: identity?.locator.remoteUrl,
+      webUrl: ownRepository ? identity?.webUrl : undefined,
+    }) ?? null;
   if (url === null) {
     // A known forge returns no URL when the repository is not in its shape.
     return yield* definition === null || definition.kind === "unknown"
