@@ -164,8 +164,10 @@ export const AntigravityDriver: ProviderDriver<
       gcpProject: settings.gcpProject,
       gcpLocation: settings.gcpLocation,
     };
-    const authConfigIssue = antigravityAuthConfigIssue(auth);
     const processEnvironment = yield* mergeProviderInstanceEnvironment(environment);
+    const usesGateway = Boolean(processEnvironment.AGY_LLM_GATEWAY_URL?.trim());
+    const authConfigIssue = usesGateway ? null : antigravityAuthConfigIssue(auth);
+    const profileAuth = usesGateway ? { ...auth, apiKey: "" } : auth;
     const userHome = resolveAntigravityUserHome(
       yield* HostProcess.Platform,
       processEnvironment,
@@ -259,7 +261,7 @@ export const AntigravityDriver: ProviderDriver<
       const profile = yield* prepareAntigravityProfile({
         profileDirectory,
         baseEnv: processEnvironment,
-        auth,
+        auth: profileAuth,
         userHome,
         tempDirectory: directories.runtimeTemp,
       }).pipe(
@@ -308,7 +310,7 @@ export const AntigravityDriver: ProviderDriver<
           profile,
           cwd,
           baseEnv,
-          auth,
+          auth: profileAuth,
           runtimeTempDirectory,
         }),
       };
@@ -384,6 +386,7 @@ export const AntigravityDriver: ProviderDriver<
       const runtime = yield* makeAntigravityAcpRuntime({
         ...runtimeInput,
         authMethod: auth.authMethod,
+        usesGateway,
         childProcessSpawner: spawner,
         spawn,
       }).pipe(Effect.provideService(SecureRandom.SecureRandom, random));
@@ -475,7 +478,7 @@ export const AntigravityDriver: ProviderDriver<
     const codeLogin = Effect.fn("AntigravityDriver.codeLogin")(function* (input: {
       readonly onAuthorizationUrl: (url: string) => Effect.Effect<void, AcpErrors.AcpError>;
     }) {
-      if (auth.authMethod !== "oauth-personal") return undefined;
+      if (usesGateway || auth.authMethod !== "oauth-personal") return undefined;
       const cwd = yield* fileSystem
         .makeTempDirectoryScoped({ prefix: "t3-antigravity-login-" })
         .pipe(
@@ -580,7 +583,7 @@ export const AntigravityDriver: ProviderDriver<
       makeRuntime: makeDisposableRuntime,
       onAuthenticated: publishCatalog,
       onSignedOut: Effect.suspend(() => provider.onSignedOut),
-      usesBrowser: antigravityAuthUsesBrowser(auth.authMethod),
+      usesBrowser: !usesGateway && antigravityAuthUsesBrowser(auth.authMethod),
       codeLogin,
     });
 
@@ -654,7 +657,9 @@ export const AntigravityDriver: ProviderDriver<
       environment: processEnvironment,
       stampIdentity: classifyModels,
       probe,
-      auth: { type: auth.authMethod, label: antigravityAuthLabel(auth.authMethod) },
+      auth: usesGateway
+        ? { type: "customEndpoint", label: "Custom API endpoint" }
+        : { type: auth.authMethod, label: antigravityAuthLabel(auth.authMethod) },
       ...(rememberedRuntimeModes ? { rememberedRuntimeModes } : {}),
       rememberRuntimeModes: (modes) =>
         writeFileStringAtomically({
@@ -748,7 +753,9 @@ export const AntigravityDriver: ProviderDriver<
             new ProviderDriverError({
               driver: DRIVER,
               instanceId,
-              detail: "Antigravity model refresh timed out. Try again or check Google sign-in.",
+              detail: usesGateway
+                ? "Antigravity model refresh timed out. Check the gateway connection."
+                : "Antigravity model refresh timed out. Try again or check Google sign-in.",
             }),
           ),
       }),
@@ -762,7 +769,9 @@ export const AntigravityDriver: ProviderDriver<
               driver: DRIVER,
               instanceId,
               detail: isAntigravitySignInRequiredError(cause)
-                ? "Sign in to Antigravity in provider settings before refreshing models."
+                ? usesGateway
+                  ? "Antigravity gateway authentication failed. Check the gateway credentials."
+                  : "Sign in to Antigravity in provider settings before refreshing models."
                 : cause._tag === "ProviderSetupError" &&
                     (cause.operation === "configure" ||
                       cause.operation === "resolve" ||
@@ -805,7 +814,19 @@ export const AntigravityDriver: ProviderDriver<
             ),
       orchestrationAdapter,
       textGeneration,
-      auth: authFlow.controller,
+      auth: usesGateway
+        ? {
+            ...authFlow.controller,
+            logout: () =>
+              Effect.fail(
+                new ProviderSetupError({
+                  instanceId,
+                  operation: "logout",
+                  detail: "Remove the gateway environment variables to disconnect Antigravity.",
+                }),
+              ),
+          }
+        : authFlow.controller,
       refreshModels,
     } satisfies ProviderInstance;
   }),

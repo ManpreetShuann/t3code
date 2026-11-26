@@ -25,6 +25,15 @@ Choose **Sign-in method** in the Antigravity instance settings:
 
 API keys are stored outside `settings.json`, and ambient `GEMINI_API_KEY` / Google env vars do not override the instance's configured method.
 
+### Use a custom gateway
+
+In the Antigravity instance's **Environment variables**, set `AGY_LLM_GATEWAY_URL`
+to the gateway base URL and `AGY_LLM_GATEWAY_API_KEY` to its key. Mark the key
+as sensitive. Set `AGY_LLM_GATEWAY_WIRE_PROTOCOL` to the protocol your gateway
+supports, such as `genai` or `openai`. Connect to load the gateway's models; no
+Google sign-in or GCP project is needed. Remove the gateway variables from the
+instance and host environment to return to the selected sign-in method.
+
 ## Models, planning, and goals
 
 - Models (including Claude and GPT when included in your plan) and thinking levels come from your Antigravity account.

@@ -162,7 +162,7 @@ function safeAuthFailure(cause: Cause.Cause<unknown>, usesBrowser: boolean): str
       if (error.value.errorMessage.includes("SUBSCRIPTION_REQUIRED")) {
         return "Google requires an eligible Antigravity subscription for this account.";
       }
-      if (/access_denied|denied access|cancelled/i.test(error.value.errorMessage)) {
+      if (usesBrowser && /access_denied|denied access|cancelled/i.test(error.value.errorMessage)) {
         return "Google sign-in was not approved. Start sign-in again.";
       }
       if (error.value.method === "session/new" && error.value.code === -32603) {
@@ -359,7 +359,13 @@ export const makeAntigravityAuth = Effect.fn("makeAntigravityAuth")(function* <
       yield* runtime.initialize();
       flow.initialized = true;
       yield* Fiber.interrupt(startupHint);
-      yield* publishStartingHint(flow, NO_RESPONSE_HINT_MS, NO_RESPONSE_MESSAGE);
+      yield* publishStartingHint(
+        flow,
+        NO_RESPONSE_HINT_MS,
+        usesBrowser
+          ? NO_RESPONSE_MESSAGE
+          : "Antigravity has not finished connecting. Check the provider connection.",
+      );
       const started = yield* runtime.start();
       yield* lock.withPermits(1)(
         Effect.gen(function* () {
@@ -387,7 +393,9 @@ export const makeAntigravityAuth = Effect.fn("makeAntigravityAuth")(function* <
                 flow.state.phase !== "starting"
                   ? "Google sign-in expired. Start sign-in again."
                   : flow.initialized
-                    ? UNREACHABLE_MESSAGE
+                    ? usesBrowser
+                      ? UNREACHABLE_MESSAGE
+                      : "Antigravity could not connect. Check the provider connection."
                     : NOT_RESPONDING_MESSAGE,
               ),
             ),

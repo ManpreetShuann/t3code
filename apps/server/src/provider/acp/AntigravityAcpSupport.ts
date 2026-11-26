@@ -56,6 +56,7 @@ export interface AntigravityAcpRuntimeInput extends Omit<
   /** Conversational sessions only; helpers and probes leave the system prompt untouched. */
   readonly sessionSystemPromptAppend?: string;
   readonly authMethod?: AntigravityAuthMethod;
+  readonly usesGateway?: boolean;
 }
 
 function parseAntigravityVersion(version: string | null | undefined) {
@@ -120,7 +121,8 @@ export const makeAntigravityAcpRuntime = Effect.fn("makeAntigravityAcpRuntime")(
     AcpSessionRuntime.layer({
       ...input,
       authMethodId: input.authMethod ?? "oauth-personal",
-      authenticateEagerly: true,
+      authenticateEagerly: !input.usesGateway,
+      authenticateOnAuthRequired: !input.usesGateway,
       resumeMethod: "resume",
       cancelBehavior: "wait-for-prompt",
       clientInfo: { name: "t3-code", title: "T3 Code", version: packageJson.version },

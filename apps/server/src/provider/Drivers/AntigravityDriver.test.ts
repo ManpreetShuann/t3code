@@ -21,6 +21,7 @@ import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -313,6 +314,88 @@ const layerTest = ProviderHostLive.layer.pipe(
 );
 
 it.layer(layerTest)("AntigravityDriver", (it) => {
+  it.effect.skipIf(windowsHost)("connects a configured gateway without Google authentication", () =>
+    Effect.gen(function* () {
+      const h = yield* makeHarness({
+        config: { authMethod: "gemini-api-key" },
+        environment: [
+          { name: "AGY_LLM_GATEWAY_URL", value: "http://127.0.0.1:4141" },
+          { name: "AGY_LLM_GATEWAY_API_KEY", value: "gateway-key" },
+          { name: "AGY_LLM_GATEWAY_WIRE_PROTOCOL", value: "genai" },
+        ],
+      });
+      yield* h.refresh();
+      const snapshot = yield* h.instance.snapshot.getSnapshot;
+      expect(snapshot.status).toBe("ready");
+      expect(snapshot.auth.type).toBe("customEndpoint");
+      expect(snapshot.auth.canLogout).toBe(false);
+      expect(snapshot.models.length).toBeGreaterThan(0);
+      expect((yield* h.readRequests).map((request) => request.method)).toEqual([
+        "initialize",
+        "session/new",
+      ]);
+      const launch = h.launches.find((item) => item.tempDirectory !== undefined);
+      expect(launch?.environment.AGY_LLM_GATEWAY_URL).toBe("http://127.0.0.1:4141");
+      expect(launch?.environment.AGY_LLM_GATEWAY_API_KEY).toBe("gateway-key");
+      expect(launch?.environment.AGY_LLM_GATEWAY_WIRE_PROTOCOL).toBe("genai");
+      expect(launch?.geminiApiKey).toBeUndefined();
+      if (!h.instance.auth) return yield* Effect.die("Antigravity does not expose setup.");
+      const logoutError = yield* h.instance.auth.logout(Effect.void).pipe(Effect.flip);
+      expect(logoutError.detail).toContain("Remove the gateway environment variables");
+      yield* h.assertClosed;
+    }),
+  );
+
+  it.effect.skipIf(windowsHost)(
+    "connects a gateway from provider setup without opening Google login",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          environment: [
+            { name: "AGY_LLM_GATEWAY_URL", value: "http://127.0.0.1:4141" },
+            { name: "AGY_LLM_GATEWAY_API_KEY", value: "gateway-key" },
+          ],
+        });
+        if (!h.instance.auth) return yield* Effect.die("Antigravity does not expose setup.");
+        const owner = "gateway-test";
+        yield* h.instance.auth.start(owner);
+        const result = yield* h.instance.auth.subscribe(owner).pipe(
+          Stream.filter((state) => state.phase === "succeeded" || state.phase === "failed"),
+          Stream.runHead,
+          Effect.map(Option.getOrThrow),
+        );
+        expect(result.phase).toBe("succeeded");
+        expect((yield* h.readRequests).map((request) => request.method)).toEqual([
+          "initialize",
+          "session/new",
+        ]);
+        expect(h.launches.some((launch) => launch.args.includes("--login"))).toBe(false);
+        yield* h.assertClosed;
+      }),
+  );
+
+  it.effect.skipIf(windowsHost)(
+    "reports gateway authentication failures without Google login",
+    () =>
+      Effect.gen(function* () {
+        const h = yield* makeHarness({
+          environment: [
+            { name: "AGY_LLM_GATEWAY_URL", value: "http://127.0.0.1:4141" },
+            { name: "T3_ACP_REQUIRE_AUTH", value: "1" },
+          ],
+        });
+        const error = yield* h.refresh().pipe(Effect.flip);
+        expect(error.detail).toBe(
+          "Antigravity gateway authentication failed. Check the gateway credentials.",
+        );
+        expect((yield* h.readRequests).map((request) => request.method)).toEqual([
+          "initialize",
+          "session/new",
+        ]);
+        yield* h.assertClosed;
+      }),
+  );
+
   it.effect.skipIf(windowsHost)(
     "reports an incompatible managed runtime during a health check",
     () =>

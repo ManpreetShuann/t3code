@@ -233,7 +233,9 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
   options: AntigravityProviderOptions,
 ) {
   const usesCredentials =
-    options.auth?.type === "gemini-api-key" || options.auth?.type === "agent-platform";
+    options.auth?.type === "gemini-api-key" ||
+    options.auth?.type === "agent-platform" ||
+    options.auth?.type === "customEndpoint";
   const signInMessage = usesCredentials
     ? `Connect with ${options.auth.label} to use Antigravity and load models.`
     : SIGN_IN_MESSAGE;
@@ -445,6 +447,7 @@ export const makeAntigravityProvider = Effect.fn("makeAntigravityProvider")(func
             status: "authenticated",
             type: options.auth?.type ?? "oauth-personal",
             label: options.auth?.label ?? "Google account",
+            ...(options.auth?.type === "customEndpoint" ? { canLogout: false } : {}),
           },
           checkedAt: updatedAt,
           models: buildAntigravityModelsFromSession(started.sessionSetupResult, thinkingLevels, {
