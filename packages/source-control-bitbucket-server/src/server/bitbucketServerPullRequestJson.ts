@@ -188,7 +188,10 @@ const RawMergeCheckSchema = Schema.Struct({
   vetoes: Schema.optional(
     Schema.NullOr(
       Schema.Array(
-        Schema.Struct({ summaryMessage: Schema.optional(Schema.NullOr(Schema.String)) }),
+        Schema.Struct({
+          summaryMessage: Schema.optional(Schema.NullOr(Schema.String)),
+          detailedMessage: Schema.optional(Schema.NullOr(Schema.String)),
+        }),
       ),
     ),
   ),
@@ -372,17 +375,35 @@ export function decodeRepositoryPermissionJson(
 }
 
 /**
- * A conflict is the one veto the page has a word for. Anything else the host would refuse the
- * merge over — approvals, builds, tasks — leaves the branch itself mergeable, and is reported by
- * the host's own refusal when the merge is asked for.
+ * A conflict is the one veto the page has a word for. Every other veto — approvals, builds,
+ * tasks — is a merge requirement the host refuses over, so each is listed as a required check
+ * that is still pending until the host clears it.
  */
-export function decodeMergeCheckJson(
-  raw: string,
-): Result.Result<PullRequestMergeability, DecodeFailure> {
+export function decodeMergeCheckJson(raw: string): Result.Result<
+  {
+    readonly mergeability: PullRequestMergeability;
+    readonly blockers: ReadonlyArray<PullRequestCheck>;
+  },
+  DecodeFailure
+> {
   const decoded = decodeMergeCheck(raw);
   if (!Result.isSuccess(decoded)) return Result.fail(decoded.failure);
-  if (decoded.success.conflicted === true) return Result.succeed("conflicting");
-  return Result.succeed(decoded.success.canMerge === undefined ? "unknown" : "mergeable");
+  const { canMerge, conflicted, vetoes } = decoded.success;
+  const mergeability: PullRequestMergeability =
+    conflicted === true ? "conflicting" : canMerge === true ? "mergeable" : "unknown";
+  const blockers: PullRequestCheck[] = [];
+  for (const veto of vetoes ?? []) {
+    const name = trimmed(veto.summaryMessage) ?? trimmed(veto.detailedMessage);
+    if (name === null) continue;
+    blockers.push({
+      name,
+      status: "pending",
+      description: trimmed(veto.detailedMessage),
+      url: null,
+      required: true,
+    });
+  }
+  return Result.succeed({ mergeability, blockers });
 }
 
 /** The commit's first parent, which is the old side of its own diff. Null on a root commit. */

@@ -385,7 +385,7 @@ it.effect("reads the merge check, the head commit's build statuses and the commi
   return Effect.gen(function* () {
     const api = yield* BitbucketServerPullRequestApi.BitbucketServerPullRequestApi;
     const target = { repository: "~JDOE/testing-repo", number: 2 };
-    const mergeability = yield* api.getMergeability(target);
+    const mergeCheck = yield* api.getMergeCheck(target);
     const checks = yield* api.listChecks({
       repository: "~JDOE/testing-repo",
       commit: "5e8770617aea7591ffda6a0fbe82149cf9a739a8",
@@ -393,7 +393,8 @@ it.effect("reads the merge check, the head commit's build statuses and the commi
     const commits = yield* api.listCommits(target);
     const changedFiles = yield* api.getChangedFileCount(target);
 
-    assert.strictEqual(mergeability, "conflicting");
+    assert.strictEqual(mergeCheck.mergeability, "conflicting");
+    assert.deepStrictEqual(mergeCheck.blockers, []);
     assert.strictEqual(changedFiles, 2);
     assert.deepStrictEqual(checks, [
       { name: "CI build", status: "success", description: null, url: "https://ci/2" },

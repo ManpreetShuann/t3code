@@ -180,14 +180,22 @@ describe("decodeRepositoryPermissionJson", () => {
 });
 
 describe("decodeMergeCheckJson", () => {
-  it("reads a conflict as conflicting and any other veto as a mergeable branch", () => {
+  it("reads a conflict as conflicting and a clean merge as mergeable", () => {
     expect(
       success(
         decodeMergeCheckJson(
           JSON.stringify({ canMerge: true, conflicted: false, outcome: "CLEAN", vetoes: [] }),
         ),
       ),
-    ).toBe("mergeable");
+    ).toEqual({ mergeability: "mergeable", blockers: [] });
+    expect(
+      success(
+        decodeMergeCheckJson(JSON.stringify({ canMerge: false, conflicted: true, vetoes: [] })),
+      ),
+    ).toEqual({ mergeability: "conflicting", blockers: [] });
+  });
+
+  it("lists each veto other than a conflict as a pending required check", () => {
     expect(
       success(
         decodeMergeCheckJson(
@@ -195,16 +203,36 @@ describe("decodeMergeCheckJson", () => {
             canMerge: false,
             conflicted: false,
             outcome: "UNKNOWN",
-            vetoes: [{ summaryMessage: "Requires approvals" }],
+            vetoes: [
+              {
+                summaryMessage: "You need 2 more approvals.",
+                detailedMessage: "Requires 2 approvals before merging.",
+              },
+              { summaryMessage: null, detailedMessage: "Build must pass." },
+              { summaryMessage: null, detailedMessage: null },
+            ],
           }),
         ),
       ),
-    ).toBe("mergeable");
-    expect(
-      success(
-        decodeMergeCheckJson(JSON.stringify({ canMerge: false, conflicted: true, vetoes: [] })),
-      ),
-    ).toBe("conflicting");
+    ).toEqual({
+      mergeability: "unknown",
+      blockers: [
+        {
+          name: "You need 2 more approvals.",
+          status: "pending",
+          description: "Requires 2 approvals before merging.",
+          url: null,
+          required: true,
+        },
+        {
+          name: "Build must pass.",
+          status: "pending",
+          description: "Build must pass.",
+          url: null,
+          required: true,
+        },
+      ],
+    });
   });
 });
 

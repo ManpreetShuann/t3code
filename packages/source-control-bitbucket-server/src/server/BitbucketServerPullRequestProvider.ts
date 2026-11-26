@@ -43,6 +43,8 @@ const CAPABILITIES: PullRequestCapabilities = {
   withheldFileDiff: true,
 };
 
+const NO_MERGE_CHECK = { mergeability: "unknown", blockers: [] } as const;
+
 const UNAVAILABLE_REQUIREMENT = {
   missing:
     "Bitbucket Data Center needs a host URL and token on the server. Add them in Settings → Source Control.",
@@ -259,16 +261,28 @@ export const make = Effect.gen(function* () {
           createdAt: pr.createdAt,
         })),
       ),
-    getChangeRequestChecks: (input) =>
-      api.getPullRequest({ repository: input.repository, number: input.number }).pipe(
+    getChangeRequestChecks: (input) => {
+      const target = { repository: input.repository, number: input.number };
+      return api.getPullRequest(target).pipe(
         Effect.flatMap((pullRequest) =>
-          (pullRequest.headCommit === null
-            ? Effect.succeed([])
-            : api.listChecks({ repository: input.repository, commit: pullRequest.headCommit })
-          ).pipe(Effect.map((checks) => ({ state: pullRequest.state, checks }))),
+          Effect.all(
+            [
+              pullRequest.headCommit === null
+                ? Effect.succeed([])
+                : api.listChecks({ repository: input.repository, commit: pullRequest.headCommit }),
+              api.getMergeCheck(target).pipe(recoverRead(NO_MERGE_CHECK)),
+            ],
+            { concurrency: 2 },
+          ).pipe(
+            Effect.map(([checks, mergeCheck]) => ({
+              state: pullRequest.state,
+              checks: [...checks, ...mergeCheck.blockers],
+            })),
+          ),
         ),
         Effect.mapError(fail("getChangeRequestChecks")),
-      ),
+      );
+    },
 
     getChangeRequest: (input) => {
       const target = { repository: input.repository, number: input.number };
@@ -276,7 +290,7 @@ export const make = Effect.gen(function* () {
         Effect.flatMap((pullRequest) =>
           Effect.all(
             [
-              api.getMergeability(target).pipe(recoverRead("unknown" as const)),
+              api.getMergeCheck(target).pipe(recoverRead(NO_MERGE_CHECK)),
               pullRequest.headCommit === null
                 ? Effect.succeed([])
                 : api
@@ -294,8 +308,8 @@ export const make = Effect.gen(function* () {
           ).pipe(
             Effect.map(
               ([
-                mergeability,
-                checks,
+                mergeCheck,
+                listedChecks,
                 changedFiles,
                 lineCounts,
                 canWrite,
@@ -304,20 +318,20 @@ export const make = Effect.gen(function* () {
                 ...toChangeRequest(pullRequest),
                 ...lineCounts,
                 ...(pullRequest.headCommit === null ? {} : { headSha: pullRequest.headCommit }),
-                mergeability,
+                mergeability: mergeCheck.mergeability,
                 changedFiles,
                 body: pullRequest.body,
                 mergedAt: pullRequest.state === "merged" ? pullRequest.closedAt : null,
                 closedAt: pullRequest.closedAt,
                 reviewers: pullRequest.reviewers,
-                checks,
+                checks: [...listedChecks, ...mergeCheck.blockers],
                 // The host publishes no per-repository list of allowed strategies, so the three
                 // it supports are all offered and one the repository forbids fails on merge.
                 mergeCapabilities: { merge: true, squash: true, rebase: true },
                 ...(autoMerge === null ? {} : { autoMergeEnabled: autoMerge.enabled }),
                 viewerPermissions: bitbucketServerViewerPermissions({
                   canWrite,
-                  mergeable: mergeability === "mergeable",
+                  mergeable: mergeCheck.mergeability === "mergeable",
                   ...(autoMerge === null ? {} : { autoMergeAllowed: autoMerge.allowed }),
                 }),
               }),

@@ -40,7 +40,7 @@ describe("getChangeRequest", () => {
     );
     const api = Layer.mock(BitbucketServerPullRequestApi.BitbucketServerPullRequestApi)({
       getPullRequest: () => Effect.succeed(pullRequest),
-      getMergeability: () => Effect.succeed("conflicting" as const),
+      getMergeCheck: () => Effect.succeed({ mergeability: "conflicting" as const, blockers: [] }),
       listChecks,
       getChangedFileCount: () => Effect.succeed(3),
       getLineCounts: () => Effect.succeed({ additions: 7, deletions: 2 }),
@@ -82,7 +82,7 @@ describe("getChangeRequest", () => {
   it.effect("grants merge when the permission could not be read at all", () => {
     const api = Layer.mock(BitbucketServerPullRequestApi.BitbucketServerPullRequestApi)({
       getPullRequest: () => Effect.succeed(pullRequest),
-      getMergeability: () => Effect.succeed("mergeable" as const),
+      getMergeCheck: () => Effect.succeed({ mergeability: "mergeable" as const, blockers: [] }),
       listChecks: () => Effect.succeed([]),
       getChangedFileCount: () => Effect.succeed(1),
       getLineCounts: () => Effect.succeed({ additions: 0, deletions: 0 }),
@@ -219,6 +219,19 @@ describe("getChangeRequestChecks", () => {
     const api = Layer.mock(BitbucketServerPullRequestApi.BitbucketServerPullRequestApi)({
       getPullRequest: () => Effect.succeed({ ...pullRequest, state: "merged" as const }),
       listChecks,
+      getMergeCheck: () =>
+        Effect.succeed({
+          mergeability: "unknown" as const,
+          blockers: [
+            {
+              name: "Requires 1 approval",
+              status: "pending" as const,
+              description: null,
+              url: null,
+              required: true,
+            },
+          ],
+        }),
     });
 
     return Effect.gen(function* () {
@@ -226,7 +239,16 @@ describe("getChangeRequestChecks", () => {
       if (read === undefined) return yield* Effect.die("checks read missing");
       expect(yield* read(input)).toEqual({
         state: "merged",
-        checks: [{ name: "CI", status: "failure", description: null, url: null }],
+        checks: [
+          { name: "CI", status: "failure", description: null, url: null },
+          {
+            name: "Requires 1 approval",
+            status: "pending",
+            description: null,
+            url: null,
+            required: true,
+          },
+        ],
       });
       assert.strictEqual(
         listChecks.mock.calls[0]?.[0].commit,
@@ -238,6 +260,7 @@ describe("getChangeRequestChecks", () => {
   it.effect("has no checks to read without a head commit", () => {
     const api = Layer.mock(BitbucketServerPullRequestApi.BitbucketServerPullRequestApi)({
       getPullRequest: () => Effect.succeed({ ...pullRequest, headCommit: null }),
+      getMergeCheck: () => Effect.succeed({ mergeability: "mergeable" as const, blockers: [] }),
     });
 
     return Effect.gen(function* () {

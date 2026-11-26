@@ -228,10 +228,16 @@ export class BitbucketServerPullRequestApi extends Context.Service<
       readonly repository: string;
     }) => Effect.Effect<boolean, BitbucketServerPullRequestApiError>;
 
-    readonly getMergeability: (input: {
+    readonly getMergeCheck: (input: {
       readonly repository: string;
       readonly number: number;
-    }) => Effect.Effect<PullRequestMergeability, BitbucketServerPullRequestApiError>;
+    }) => Effect.Effect<
+      {
+        readonly mergeability: PullRequestMergeability;
+        readonly blockers: ReadonlyArray<PullRequestCheck>;
+      },
+      BitbucketServerPullRequestApiError
+    >;
 
     /**
      * Build statuses on one commit. The repository-scoped `/commits/{id}/builds` only reads a
@@ -1022,10 +1028,10 @@ const make = Effect.gen(function* () {
         ),
     ),
 
-    getMergeability: Effect.fn("BitbucketServerPullRequestApi.getMergeability")((input) =>
+    getMergeCheck: Effect.fn("BitbucketServerPullRequestApi.getMergeCheck")((input) =>
       withRepository(input.repository, (path) =>
         read({
-          operation: "getMergeability",
+          operation: "getMergeCheck",
           url: `${path}/pull-requests/${input.number}/merge`,
           decode: decodeMergeCheckJson,
         }),
