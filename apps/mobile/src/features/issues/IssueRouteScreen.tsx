@@ -4,6 +4,7 @@ import {
   issueEventSentence,
   issueLinksOpenInApp,
 } from "@t3tools/client-runtime/issue-presentation";
+import { sourceControlClients } from "@t3tools/client-runtime/source-control-clients";
 import { createIssueCommentPager } from "@t3tools/client-runtime/state/issues";
 import { visibleLinkedThreads } from "@t3tools/client-runtime/state/threads";
 import type {
@@ -324,7 +325,7 @@ function IssueRelationsSection(props: {
           <Pressable
             key={`${relation ?? ""}:${item.key}`}
             accessibilityRole="link"
-            onPress={() => void Linking.openURL(item.url)}
+            onPress={() => void tryOpenExternalUrl(item.url)}
             className="flex-row items-center gap-2 rounded-2xl bg-grouped-card p-3 active:opacity-70"
           >
             <View className="min-w-0 flex-1">
@@ -356,7 +357,7 @@ function IssueAttachmentsSection(props: { readonly attachments: ReadonlyArray<Is
         <Pressable
           key={file.id}
           accessibilityRole="link"
-          onPress={() => void Linking.openURL(file.url)}
+          onPress={() => void tryOpenExternalUrl(file.url)}
           className="flex-row items-center gap-2 rounded-2xl bg-grouped-card p-3 active:opacity-70"
         >
           <SymbolView name="doc" size={14} tintColorClassName="accent-icon-muted" />

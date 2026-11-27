@@ -480,7 +480,10 @@ function StateChoices(props: {
   const known = usePickerCandidates(props.scopes, "states", "");
   const needle = query.trim().toLowerCase();
   const visible = [
-    ...new Set([...props.value, ...known.states.filter((name) => matches(needle, name))]),
+    ...new Set([
+      ...props.value,
+      ...known.states.filter((name) => matchesIssueFilterQuery(needle, name)),
+    ]),
   ];
   return (
     <>
@@ -580,8 +583,7 @@ function AssigneeChoices(props: {
   const hasJira = props.scopes.some(({ input }) => input.tracker === "jira");
   const needle = query.trim().slice(0, CANDIDATE_QUERY_LIMIT).toLowerCase();
   const found = known.assignees.filter(
-    (actor) =>
-      actor.tracker === "jira" || matchesIssueFilterQuery(needle, actor.login, actor.name),
+    (actor) => actor.tracker === "jira" || matchesIssueFilterQuery(needle, actor.login, actor.name),
   );
   const selected = props.id ? `jira:${props.id}` : props.value;
   const foundOptions = hasJira

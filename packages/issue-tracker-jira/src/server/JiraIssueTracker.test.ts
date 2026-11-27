@@ -340,6 +340,153 @@ describe("JiraIssueTracker", () => {
     }),
   );
 
+  it.effect("narrows a listing by raw JQL, Jira involvement, types, statuses and account id", () =>
+    Effect.gen(function* () {
+      const { tracker, requests } = fakeJira({
+        "POST /rest/api/3/search/jql": () => ({ issues: [] }),
+      });
+      const api = yield* tracker;
+      yield* api.listIssues({
+        ...listInput,
+        state: "all",
+        jiraInvolvement: "assigned-or-authored",
+        assigneeId: THEO.accountId,
+        labels: ["platform"],
+        issueTypes: ["Task", "Sub-task"],
+        states: ["In Review", "Ready"],
+        query: "jql: priority = High order by priority DESC",
+      });
+      expect(requests.at(-1)?.body).toMatchObject({
+        jql:
+          'project = "ENG" AND (assignee = currentUser() OR reporter = currentUser()) ' +
+          'AND assignee = "acc_theo" AND labels = "platform" ' +
+          'AND issuetype in ("Task", "Sub-task") AND status in ("In Review", "Ready") ' +
+          "AND (priority = High) ORDER BY priority DESC",
+      });
+    }),
+  );
+
+  it.effect("reads an issue's type, relations, attachments and development panel pulls", () =>
+    Effect.gen(function* () {
+      const related = (key: string, state = TODO) => ({
+        key,
+        fields: { summary: `Issue ${key}`, status: state },
+      });
+      const { tracker } = fakeJira({
+        "GET /rest/api/3/myself": () => JULIUS,
+        "GET /rest/api/3/issue/ENG-7": () =>
+          issue("ENG-7", {
+            issuetype: { name: "Bug" },
+            priority: { name: "High" },
+            parent: related("ENG-1", IN_PROGRESS),
+            subtasks: [related("ENG-8", DONE)],
+            issuelinks: [
+              { type: { name: "Blocks", outward: "blocks" }, outwardIssue: related("ENG-9") },
+              { type: { name: "Relates" }, inwardIssue: related("OPS-2") },
+            ],
+            attachment: [
+              {
+                id: "a1",
+                filename: "trace.log",
+                content: "https://acme.atlassian.net/attachment/a1",
+                mimeType: "text/plain",
+                size: 12,
+              },
+            ],
+          }),
+        "GET /rest/api/3/issue/ENG-7/comment": () => ({ total: 0, comments: [] }),
+        "GET /rest/api/3/mypermissions": () => ({ permissions: {} }),
+        "GET /rest/dev-status/latest/issue/summary": ({ query }) => {
+          expect(query.get("issueId")).toBe("id_ENG-7");
+          return { summary: { pullrequest: { byInstanceType: { GitHub: { count: 1 } } } } };
+        },
+        "GET /rest/dev-status/latest/issue/detail": ({ query }) => {
+          expect(query.get("applicationType")).toBe("GitHub");
+          return {
+            detail: [
+              {
+                pullRequests: [
+                  { name: "Fix it", url: "https://github.com/acme/web/pull/42", status: "MERGED" },
+                  { name: "Fix it", url: "https://github.com/acme/web/pull/42", status: "MERGED" },
+                ],
+              },
+            ],
+          };
+        },
+      });
+      const api = yield* tracker;
+      const detail = yield* api.getIssue({ ...target, key: "ENG-7" });
+      expect(detail).toMatchObject({
+        issueType: "Bug",
+        priority: "High",
+        parent: {
+          key: "ENG-1",
+          url: "https://acme.atlassian.net/browse/ENG-1",
+          state: { name: "In Progress" },
+        },
+        subtasks: [{ key: "ENG-8", state: { category: "closed" } }],
+        linkedIssues: [
+          { key: "ENG-9", relation: "blocks" },
+          { key: "OPS-2", relation: "Relates" },
+        ],
+        attachments: [{ id: "a1", filename: "trace.log", mimeType: "text/plain", size: 12 }],
+        linkedPullRequests: [
+          { repository: "acme/web", number: 42, state: "merged", isDraft: false },
+        ],
+      });
+      expect(detail.linkedPullRequests).toHaveLength(1);
+    }),
+  );
+
+  it.effect("offers issue types, statuses, and pages of labels and assignees to pickers", () =>
+    Effect.gen(function* () {
+      const { tracker } = fakeJira({
+        "GET /rest/api/3/project/ENG": () => ({
+          issueTypes: [
+            { id: "1", name: "Task" },
+            { id: "2", name: "Sub-task", subtask: true },
+          ],
+        }),
+        "GET /rest/api/3/project/ENG/statuses": () => [
+          { statuses: [TODO, IN_PROGRESS] },
+          { statuses: [TODO, DONE] },
+        ],
+        "GET /rest/api/3/label": ({ query }) => {
+          expect(query.get("startAt")).toBe("100");
+          return { values: ["bug", "platform"], isLast: false };
+        },
+        "GET /rest/api/3/jql/autocompletedata/suggestions": ({ query }) => {
+          expect(query.get("fieldValue")).toBe("plat");
+          return { results: [{ value: "platform" }] };
+        },
+        "GET /rest/api/3/user/assignable/search": ({ query }) => {
+          expect(query.get("query")).toBe("Theo");
+          return [THEO];
+        },
+      });
+      const api = yield* tracker;
+      const candidates = api.listCandidates!;
+      expect(yield* candidates({ ...target, kind: "issue-types" })).toMatchObject({
+        issueTypes: ["Task", "Sub-task"],
+      });
+      expect(yield* candidates({ ...target, kind: "states" })).toMatchObject({
+        states: ["To Do", "In Progress", "Done"],
+      });
+      expect(yield* candidates({ ...target, kind: "labels", offset: 100 })).toMatchObject({
+        labels: [{ name: "bug" }, { name: "platform" }],
+        hasMore: true,
+      });
+      expect(yield* candidates({ ...target, kind: "labels", query: "plat" })).toMatchObject({
+        labels: [{ name: "platform" }],
+        hasMore: false,
+      });
+      expect(yield* candidates({ ...target, kind: "assignees", query: "Theo" })).toMatchObject({
+        assignees: [{ login: "Theo", id: "acc_theo", tracker: "jira" }],
+        hasMore: false,
+      });
+    }),
+  );
+
   it.effect("moves an issue by the transition that leads to the named status", () =>
     Effect.gen(function* () {
       const { tracker, requests } = fakeJira({
@@ -421,6 +568,27 @@ describe("JiraIssueTracker", () => {
           assignee: { accountId: "acc_theo" },
         },
       });
+
+      yield* api.create({
+        ...target,
+        title: "Typed",
+        body: "",
+        labels: [],
+        assignees: [],
+        issueType: "bug",
+      });
+      expect(requests.at(-1)?.body).toMatchObject({ fields: { issuetype: { id: "1" } } });
+      const unknown = yield* api
+        .create({
+          ...target,
+          title: "Typed",
+          body: "",
+          labels: [],
+          assignees: [],
+          issueType: "Epic",
+        })
+        .pipe(Effect.flip);
+      expect(unknown.detail).toContain('no issue type "Epic"');
     }),
   );
 

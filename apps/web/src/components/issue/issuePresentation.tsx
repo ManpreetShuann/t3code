@@ -25,7 +25,6 @@ export const IssueGlyph = { issue: CircleDotIcon } as const;
 const STANDALONE_TRACKERS: Partial<Record<string, { providerName: string; Icon: Icon }>> = {
   jira: { providerName: "Jira", Icon: JiraIcon },
   linear: { providerName: "Linear", Icon: LinearIcon },
-  jira: { providerName: "Jira", Icon: JiraIcon },
 };
 
 /** A git host's tracker wears the host's own icon and name; a standalone tracker wears its kind. */

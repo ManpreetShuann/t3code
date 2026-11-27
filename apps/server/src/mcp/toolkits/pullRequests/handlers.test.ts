@@ -422,7 +422,7 @@ describe("pull request toolkit handlers", () => {
           { host: "code.example.com:9443", repository: "PROJ/web", number: 42 },
         ]) {
           const error = yield* bitbucket.call("link_pull_request", target).pipe(Effect.flip);
-          expect(error).toMatchObject({ _tag: "PullRequestUrlUnavailableError" });
+          expect(error).toMatchObject({ _tag: "PullRequestRepositoryInvalidError" });
         }
       }
     }),

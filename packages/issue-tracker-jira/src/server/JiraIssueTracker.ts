@@ -484,9 +484,7 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
             ...(input.issueTypes?.length
               ? [`issuetype in (${input.issueTypes.map(quoted).join(", ")})`]
               : []),
-            ...(input.states?.length
-              ? [`status in (${input.states.map(quoted).join(", ")})`]
-              : []),
+            ...(input.states?.length ? [`status in (${input.states.map(quoted).join(", ")})`] : []),
             ...(rawJql === null || rawJql.predicate === "" ? [] : [`(${rawJql.predicate})`]),
             ...(text === undefined
               ? []
@@ -750,7 +748,10 @@ export const make: Effect.Effect<StandaloneIssueTrackerApi, never, JiraApi.JiraA
             input.query === undefined
               ? jira.labels
               : Effect.succeed({ names: [], truncated: false }),
-            jira.assignable(project, input.query === undefined ? undefined : { query: input.query }),
+            jira.assignable(
+              project,
+              input.query === undefined ? undefined : { query: input.query },
+            ),
           ],
           { concurrency: 2 },
         ).pipe(

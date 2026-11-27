@@ -1591,101 +1591,41 @@ export function PullRequestDetailPanel({
   }
 
   return (
-    // One tooltip for the panel's many triggers; mounting one per trigger dominated opening it.
-    <SharedTooltipProvider>
-      <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
-        {threadPickerOpen && detail ? (
-          <PullRequestThreadLinks
-            key={`${environmentId}:${detail.url}`}
-            display="picker"
-            environmentId={environmentId}
-            reference={reference}
-            url={detail.url}
-            threadRef={null}
-            onPickerOpenChange={setThreadPickerOpen}
-          />
-        ) : null}
-        <div
-          className={cn(
-            "@container/pr-header grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2",
-            detail && "border-b border-border/60",
-            !detail && !onClose && "hidden",
-          )}
-        >
-          <PullRequestDetailCrumbs
-            detail={detail}
-            threadRef={threadRef}
-            toneClassName={statePresentation?.toneClassName ?? null}
-            condensed={condensed}
-            repositoryUrl={repositoryUrl}
-            openOnHostText={openOnHostText}
-            onBack={onBack}
-          />
-          <div className="mr-4 flex h-7 shrink-0 select-none items-center justify-end gap-1">
-            {detail ? (
-              <TooltipProvider delay={150} closeDelay={150} timeout={400}>
-                {detail.visibility === "private" ? <PullRequestPrivateBadge /> : null}
-                {context === "page" ? (
-                  <PullRequestThreadLinks
-                    display="count"
-                    environmentId={environmentId}
-                    reference={reference}
-                    url={detail.url}
-                    threadRef={null}
-                  />
-                ) : null}
-                {!nativeStack && supportsStackActions && nativeStackQuery.error ? (
-                  <Button variant="ghost" size="xs" onClick={nativeStackQuery.refresh}>
-                    <T>Retry stack lookup</T>
-                  </Button>
-                ) : null}
-                {nativeStack ? (
-                  <PullRequestStackMenu
-                    hostLabel={hostClient.label}
-                    terminology={terminology}
-                    stack={nativeStack}
-                    notice={nativeStackQuery.notice}
-                    onRetry={nativeStackQuery.error ? nativeStackQuery.refresh : undefined}
-                    reference={reference}
-                    environmentId={environmentId}
-                    shownHeadSha={shownHeadSha}
-                    onSelect={onSelectPullRequest}
-                    mergeMethod={selectedMergeMethod}
-                    stale={!nativeStackQuery.isFresh}
-                    canMerge={
-                      supportsStackActions && can("merge") && allowedMergeMethods.length > 0
-                    }
-                    canRebase={
-                      supportsStackActions && detail.viewerPermissions.stackRebase === true
-                    }
-                    canAutoMerge={
-                      stackAutoMerge && can("enable-auto-merge") && allowedMergeMethods.length > 0
-                    }
-                    preferAutoMerge={checksState !== null && checksState !== "passing"}
-                    autoMergeArmed={stackAutoMerge && autoMergeArmed}
-                    canCancelAutoMerge={stackAutoMerge && can("disable-auto-merge")}
-                    onActed={() => {
-                      refreshDetail();
-                      onActed?.();
-                    }}
-                  />
-                ) : null}
-                <PullRequestPrimaryAction
-                  mergeBlockedReason={primaryMergeBlockedReason}
-                  pullRequestKey={pullRequestKey}
-                  primaryAction={primaryAction}
-                  autoMergeArmed={autoMergeArmed}
-                  armedAutoMergeLabel={armedAutoMergeLabel}
-                  pendingAutoMergeLabel={pendingAutoMergeLabel}
-                  selectedMergeMethod={selectedMergeMethod}
-                  selectedMergeMethodLabel={selectedMergeMethodLabel}
-                  statePresentation={statePresentation}
-                  pendingAction={pendingAction}
-                  perform={perform}
-                  resolveConflicts={resolveConflictsControl}
-                />
-                {checkoutControl}
-                <PullRequestActionsMenu
+    <div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+      {threadPickerOpen && detail ? (
+        <PullRequestThreadLinks
+          key={`${environmentId}:${detail.url}`}
+          display="picker"
+          environmentId={environmentId}
+          reference={reference}
+          url={detail.url}
+          threadRef={null}
+          onPickerOpenChange={setThreadPickerOpen}
+        />
+      ) : null}
+      <div
+        className={cn(
+          "@container/pr-header grid min-w-0 shrink-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-2",
+          detail && "border-b border-border/60",
+          !detail && !onClose && "hidden",
+        )}
+      >
+        <PullRequestDetailCrumbs
+          detail={detail}
+          threadRef={threadRef}
+          toneClassName={statePresentation?.toneClassName ?? null}
+          condensed={condensed}
+          repositoryUrl={repositoryUrl}
+          openOnHostText={openOnHostText}
+          onBack={onBack}
+        />
+        <div className="mr-4 flex h-7 shrink-0 select-none items-center justify-end gap-1">
+          {detail ? (
+            <>
+              {detail.visibility === "private" ? <PullRequestPrivateBadge /> : null}
+              {context === "page" ? (
+                <PullRequestThreadLinks
+                  display="count"
                   environmentId={environmentId}
                   reference={reference}
                   url={detail.url}
@@ -1725,7 +1665,7 @@ export function PullRequestDetailPanel({
                 />
               ) : null}
               <PullRequestPrimaryAction
-                mergeBlockedReason={mergeBlockedReason}
+                mergeBlockedReason={primaryMergeBlockedReason}
                 pullRequestKey={pullRequestKey}
                 primaryAction={primaryAction}
                 autoMergeArmed={autoMergeArmed}

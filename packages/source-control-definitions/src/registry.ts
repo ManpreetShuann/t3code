@@ -42,10 +42,11 @@ function makeBuiltInSourceControlDefinitions(options: { readonly tanStackSource:
         ...tanStackSource.map((definition) => definition.kind),
         CursorOrigin.definition.kind,
         Forgejo.definition.kind,
-        BitbucketServer.definition.kind,
         GitHub.definition.kind,
         GitLab.definition.kind,
         AzureDevOps.definition.kind,
+        // Before Bitbucket Cloud, which would take a self-hosted `bitbucket` hostname too.
+        BitbucketServer.definition.kind,
         Bitbucket.definition.kind,
       ],
     },

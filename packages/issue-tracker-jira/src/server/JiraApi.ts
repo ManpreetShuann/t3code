@@ -146,14 +146,7 @@ const ISSUE_FIELDS = [
 ];
 
 /** Only an issue's own page shows these. */
-const DETAIL_FIELDS = [
-  "description",
-  "priority",
-  "parent",
-  "subtasks",
-  "issuelinks",
-  "attachment",
-];
+const DETAIL_FIELDS = ["description", "priority", "parent", "subtasks", "issuelinks", "attachment"];
 
 const IssueType = Schema.Struct({
   id: Schema.String,
@@ -674,7 +667,10 @@ export const make = Effect.gen(function* () {
     input.query === undefined
       ? send(
           "labels",
-          Schema.Struct({ values: Schema.Array(Schema.String), isLast: Schema.optional(Schema.Boolean) }),
+          Schema.Struct({
+            values: Schema.Array(Schema.String),
+            isLast: Schema.optional(Schema.Boolean),
+          }),
           {
             method: "GET",
             path: "/rest/api/3/label",

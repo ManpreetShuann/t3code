@@ -113,6 +113,7 @@ const PROPER_NOUNS = [
   "T3 Connect",
   "T3 Chat",
   "GitHub",
+  "GitHub Copilot",
   "GitLab",
   "Bitbucket",
   "Azure DevOps",

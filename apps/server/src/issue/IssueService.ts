@@ -474,7 +474,11 @@ const make = Effect.gen(function* () {
     const errors: IssueListProjectError[] = [];
     const nextCursors: Record<string, string> = {};
 
-    const involvement = input.involvement ?? "all";
+    // Jira reads `jiraInvolvement` itself, so its combined option needs no viewer here.
+    const involvement =
+      input.involvement === undefined || input.involvement === "assigned-or-authored"
+        ? "all"
+        : input.involvement;
     const sort = input.sort ?? "updated";
     // Only a narrowed listing compares against the signed-in account; `all` never reads it.
     const viewerRequests = new Map<string, Effect.Effect<string, IssueTrackerError>>();

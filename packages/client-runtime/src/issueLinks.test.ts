@@ -172,7 +172,7 @@ describe("resolveIssueLinkTarget", () => {
           connected: true,
           account: "Julius",
           detail: null,
-          workspace: "acme",
+          workspace: "acme.atlassian.net",
           scopes: [],
         },
       ],
