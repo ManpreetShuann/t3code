@@ -46,30 +46,50 @@ export const KIRO_EFFORT_CONFIG_ID = "effortLevel";
 export const KIRO_AGENT_CONFIG_ID = "mode";
 
 /**
- * Kiro offers two permission postures, Supervised and Autopilot, which T3's
- * Supervised and Full access select. Any other mode runs Supervised.
+ * T3's Supervised, Auto and Full access select Kiro's Supervised, Approve for me
+ * and Autopilot. Any other mode runs Supervised.
  */
 export const KIRO_SUPPORTED_RUNTIME_MODES = [
   "approval-required",
+  "auto",
   "full-access",
 ] as const satisfies ReadonlyArray<RuntimeMode>;
 
-/**
- * Autopilot is on only for an unrestricted Full access thread. An explicit
- * approval or sandbox override keeps Kiro Supervised, so its end-of-turn
- * review still reaches the user and every tool prompt reaches T3's policy
- * check (the same rule as Grok's `grokLaunchRuntimeMode`).
- */
-export function kiroAutopilotValue(policy: {
+/** Kiro's policy preset behind Approve for me; it asks again when Kiro's trust classifier is down. */
+const KIRO_APPROVE_FOR_ME_PRESET = "approve-for-me";
+
+type KiroRuntimePolicy = {
   readonly runtimeMode: RuntimeMode;
   readonly approvalPolicy?: unknown;
   readonly sandboxPolicy?: unknown;
-}): "on" | "off" {
-  return policy.runtimeMode === "full-access" &&
-    policy.approvalPolicy === undefined &&
-    policy.sandboxPolicy === undefined
-    ? "on"
-    : "off";
+};
+
+/**
+ * An explicit approval or sandbox override keeps Kiro Supervised, so its
+ * end-of-turn review still reaches the user and every tool prompt reaches T3's
+ * policy check (the same rule as Grok's `grokLaunchRuntimeMode`).
+ */
+function kiroLaunchRuntimeMode(policy: KiroRuntimePolicy): RuntimeMode {
+  return policy.approvalPolicy === undefined && policy.sandboxPolicy === undefined
+    ? policy.runtimeMode
+    : "approval-required";
+}
+
+/** Autopilot is on for an unrestricted Auto or Full access thread. */
+export function kiroAutopilotValue(policy: KiroRuntimePolicy): "on" | "off" {
+  const mode = kiroLaunchRuntimeMode(policy);
+  return mode === "full-access" || mode === "auto" ? "on" : "off";
+}
+
+/**
+ * Kiro takes client-requested policy presets in the `session/new` and
+ * `session/load` `_meta`, and holds them in memory only. Auto asks for
+ * Approve for me; other modes ask for none.
+ */
+export function kiroSessionMeta(policy: KiroRuntimePolicy) {
+  return kiroLaunchRuntimeMode(policy) === "auto"
+    ? { kiro: { policyPreset: [KIRO_APPROVE_FOR_ME_PRESET] } }
+    : undefined;
 }
 
 type KiroAcpRuntimeSettings = Pick<KiroSettings, "binaryPath">;
@@ -118,6 +138,8 @@ export function kiroPermissionDisposition(
   policy: AcpRuntimePolicy,
   request: EffectAcpSchema.RequestPermissionRequest,
 ): AcpPermissionDisposition {
+  // In Auto, a prompt is one Approve for me left unsettled, so it goes to the user.
+  if (kiroLaunchRuntimeMode(policy) === "auto") return "ask";
   const disposition = acpPermissionDisposition(policy, request);
   const offersOnce = request.options.some(
     (option) => option.kind === "allow_once" && option.optionId.trim().length > 0,

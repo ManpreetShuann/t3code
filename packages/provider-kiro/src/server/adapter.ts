@@ -6,12 +6,13 @@ import {
   type OrchestrationV2ProviderCapabilities,
 } from "@t3tools/contracts";
 import { KiroSettings } from "../settings.ts";
+import { discoverKiroSkills, leadingKiroSkillMention } from "./skills.ts";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
 import type * as SecureRandom from "effect/crypto/SecureRandom";
 import * as Effect from "effect/Effect";
-import type * as FileSystem from "effect/FileSystem";
+import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
-import type * as Path from "effect/Path";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import type * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -48,6 +49,7 @@ import {
   kiroApprovalOptions,
   kiroAutopilotValue,
   kiroPermissionDisposition,
+  kiroSessionMeta,
   makeKiroAcpRuntime,
 } from "./acpSupport.ts";
 
@@ -205,6 +207,8 @@ export interface KiroAdapterV2Options {
    * default). Absent, it is `auto`.
    */
   readonly defaultModel?: Effect.Effect<string>;
+  /** Names of the skills Kiro loads in `cwd`; absent, a `$skill` mention is sent as typed. */
+  readonly skillNames?: (cwd: string | undefined) => Effect.Effect<ReadonlySet<string>>;
   /** Replaces the `kiro-cli` launch (replay tests). Kiro's session setup still applies. */
   readonly makeRuntime?: (
     input: AcpAdapterV2RuntimeInput,
@@ -539,9 +543,18 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
   const makeRuntime =
     options.makeRuntime ??
     ((input: AcpAdapterV2RuntimeInput) => {
-      const { runtimePolicy: _runtimePolicy, processEnvironment, ...runtimeInput } = input;
+      const { runtimePolicy, processEnvironment, ...runtimeInput } = input;
+      const policySessionMeta = kiroSessionMeta(runtimePolicy);
       return makeKiroAcpRuntime({
         ...runtimeInput,
+        ...(policySessionMeta === undefined
+          ? {}
+          : {
+              sessionMeta: (initializeResult) => ({
+                ...runtimeInput.sessionMeta?.(initializeResult),
+                ...policySessionMeta,
+              }),
+            }),
         settings: options.settings,
         environment: { ...options.environment, ...processEnvironment },
       });
@@ -556,6 +569,18 @@ function makeKiroAcpAdapterFlavor(options: KiroAdapterV2Options): AcpAdapterV2Fl
     // `_kiro/hooks/*` requests, which T3 does not answer.
     clientCapabilitiesMeta: { kiro: { hooks: { enabled: true, v2: true } } },
     makeRuntime,
+    // The composer inserts `$name`; Kiro runs a skill from a leading `/name`.
+    rewriteUserText: (text, turnInput) => {
+      const mention = leadingKiroSkillMention(text);
+      if (mention === undefined || options.skillNames === undefined) return Effect.succeed(text);
+      return options
+        .skillNames(turnInput.runtimePolicy.cwd ?? undefined)
+        .pipe(
+          Effect.map((names) =>
+            names.has(mention.name) ? `/${mention.name}${mention.rest}` : text,
+          ),
+        );
+    },
     promptFailure: kiroPromptFailure,
     ignoreSessionUpdate: makeKiroCloudConfigFilter(),
     normalizeSessionUpdate: (notification) =>
@@ -620,15 +645,27 @@ export const makeKiroAdapterV2Driver = (
   create: Effect.fn("KiroAdapterV2Driver.create")(
     function* (input: ProviderAdapterDriverCreateInput<KiroSettings>) {
       const hostEnvironment = yield* HostProcess.Environment;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const environment = yield* mergeProviderInstanceEnvironment(
+        input.environment,
+        hostEnvironment,
+      );
       const selfInvocation = yield* resolveSelfInvocation();
       const providerEventLoggers = yield* ProviderEventLoggers.ProviderEventLoggers;
       const makeNativeLogger = yield* makeAcpNativeLoggerFactory();
       return yield* makeKiroAdapterV2({
         instanceId: input.instanceId,
         settings: { ...input.config, enabled: input.enabled },
-        environment: yield* mergeProviderInstanceEnvironment(input.environment, hostEnvironment),
+        environment,
         selfInvocation,
         defaultModel,
+        skillNames: (cwd) =>
+          discoverKiroSkills(cwd, environment).pipe(
+            Effect.map((skills) => new Set(skills.map((skill) => skill.name))),
+            Effect.provideService(FileSystem.FileSystem, fileSystem),
+            Effect.provideService(Path.Path, path),
+          ),
         nativeLogging: (threadId) =>
           makeNativeLogger({
             nativeEventLogger: providerEventLoggers.native,

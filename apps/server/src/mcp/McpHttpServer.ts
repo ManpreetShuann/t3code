@@ -1242,7 +1242,6 @@ export const toolkitRegistration = <Tools extends Record<string, Tool.Any>, EX, 
           withAdvertisedSchemas(toolkit, McpServer.registerToolkit(decodeAsAdvertised(toolkit))),
         ),
       ),
-      ),
     ),
   ).pipe(
     Layer.provide(

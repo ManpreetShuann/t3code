@@ -62,6 +62,7 @@ import {
   kiroApprovalOptions,
   kiroAutopilotValue,
   kiroPermissionDisposition,
+  kiroSessionMeta,
   makeKiroAdapterV2,
 } from "@t3tools/provider-kiro/testing";
 
@@ -1418,6 +1419,26 @@ describe("Kiro permission policy", () => {
       cwd: "/workspace",
       ...input,
     });
+
+  it("asks Kiro for Approve for me only in an unrestricted Auto thread, and asks the user about its prompts", () => {
+    assert.deepEqual(kiroSessionMeta(policy({ runtimeMode: "auto" })), {
+      kiro: { policyPreset: ["approve-for-me"] },
+    });
+    assert.equal(kiroSessionMeta(policy({ runtimeMode: "full-access" })), undefined);
+    assert.equal(kiroSessionMeta(policy({ runtimeMode: "approval-required" })), undefined);
+    assert.equal(
+      kiroSessionMeta(policy({ runtimeMode: "auto", approvalPolicy: "on-request" })),
+      undefined,
+    );
+    assert.equal(kiroAutopilotValue(policy({ runtimeMode: "auto" })), "on");
+    assert.equal(
+      kiroPermissionDisposition(
+        policy({ runtimeMode: "auto" }),
+        writeRequest([{ optionId: "once", name: "Allow", kind: "allow_once" }]),
+      ),
+      "ask",
+    );
+  });
 
   it("keeps Autopilot on only for an unrestricted Full access thread", () => {
     assert.equal(kiroAutopilotValue(policy({ runtimeMode: "full-access" })), "on");

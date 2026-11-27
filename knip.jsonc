@@ -74,6 +74,7 @@
       // CLI archive and desktop sidecar stage them from this manifest.
       "ignoreDependencies": [
         "@effect/platform-node-shared",
+        "@napi-rs/keyring",
         "@t3tools/web",
         "ffi-rs",
         "transcribe-cpp",

@@ -3,6 +3,7 @@ export {
   kiroApprovalOptions,
   kiroAutopilotValue,
   kiroPermissionDisposition,
+  kiroSessionMeta,
   makeKiroAcpRuntime,
 } from "./server/acpSupport.ts";
 export {
